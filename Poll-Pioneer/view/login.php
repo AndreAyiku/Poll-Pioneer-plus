@@ -81,7 +81,7 @@
 <body>
     <div class="wrapper">
         <h1>Login</h1>
-        <form id="loginForm">
+        <form action="../actions/login_user.php" method="POST">
             <div class="input-box">
                 <input type="email" id="email" placeholder="Username" name="email" required>
                 <i class='bx bx-user-circle'></i>

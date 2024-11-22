@@ -125,21 +125,21 @@
     <div class="background-container">
         <header>
             <div class="logo">
-                <a href="/index.php">Poll Pioneer</a>
+                <a href="../Poll-Pioneer/index.php">Poll Pioneer</a>
             </div>
             <nav>
                 <ul>
-                    <li><a href="/view/home.php">Home</a></li>
-                    <li><a href="/view/live_poll.php">Live Polls</a></li>
-                    <li><a href="/view/create_poll.php">Create Poll</a></li>
-                    <li><a href="/view/results.php">Results</a></li>
+                    <li><a href="../Poll-Pioneer/view/home.php">Home</a></li>
+                    <li><a href="../Poll-Pioneer/view/live_poll.php">Live Polls</a></li>
+                    <li><a href="../Poll-Pioneer/view/create_poll.php">Create Poll</a></li>
+                    <li><a href="../Poll-Pioneer/view/results.php">Results</a></li>
                     <li><a href="#">About</a></li>
                     <li><a href="#">Contact</a></li>
                 </ul>
             </nav>
             <div class="auth-buttons">
-                <a href="/view/login.php">Login</a>
-                <a href="/view/sign-up.php">Sign Up</a>
+                <a href="../Poll-Pioneer/view/login.php">Login</a>
+                <a href="../Poll-Pioneer/view/sign-up.php">Sign Up</a>
             </div>
         </header>
 
@@ -148,7 +148,7 @@
                 <h1>VOICE YOUR OPINION</h1>
                 <h2>SHAPE THE FUTURE WITH EVERY VOTE</h2>
                 <p>Join Poll Pioneer and be part of the decision-making process. Participate in exciting polls, create your own surveys, and explore the power of collective opinion. Your voice matters in shaping our shared future!</p>
-                <a href="/view/home.php" class="cta-button">Start Voting</a>
+                <a href="../Poll-Pioneer/view/home.php" class="cta-button">Start Voting</a>
             </div>
         </div>
 
