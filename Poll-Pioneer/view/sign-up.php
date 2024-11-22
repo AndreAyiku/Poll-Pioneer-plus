@@ -78,7 +78,7 @@
 <body>
     <div class="wrapper">
         <h1>Sign Up</h1>
-        <form id="signupForm">
+        <form action="../actions/signup_user.php" method="POST">
         <div class="input-box">
                 <input type="text" id="fname" placeholder="First Name" name="fname" required>
                 <i class='bx bx-user-circle'></i>
