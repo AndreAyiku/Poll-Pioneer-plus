@@ -1,8 +1,31 @@
+<?php
+// Include the database connection configuration
+include '../db/config.php';
+// Start session for authentication
+session_start();
+
+// Check if the user is logged in
+if (!isset($_SESSION['user_id'])) {
+    $_SESSION['error'] = "You need to be logged in first to access the page.";
+    header("Location: ../view/login.php");
+    exit();
+}
+$currentDateTime = date('Y-m-d H:i:s');
+
+// Updated query to include PollImage
+$sql = "SELECT PollID, PollTitle, PollDescription, PollType, PollImage 
+        FROM PP_Polls 
+        WHERE PollEnd > '$currentDateTime'";
+
+$result = $conn->query($sql);
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="../assests/images/voting-box.ico">
     <title>Poll Pioneer - Live Polls</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
@@ -91,25 +114,36 @@
             overflow-y: auto;
         }
 
+        .polls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
         .poll-container {
             background-color: rgba(255, 255, 255, 0.1);
             backdrop-filter: blur(10px);
             border-radius: 15px;
             padding: 1.5rem;
-            margin-bottom: 2rem;
             transition: all 0.3s ease;
             border: 1px solid rgba(255, 255, 255, 0.1);
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
         }
 
         .poll-container:hover {
             background-color: rgba(255, 255, 255, 0.15);
             box-shadow: 0 5px 20px rgba(79, 172, 254, 0.4);
+            transform: translateY(-5px);
         }
 
         .poll-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            margin-bottom: 1rem;
         }
 
         .poll-header h3 {
@@ -124,6 +158,7 @@
         .poll-description {
             font-size: 1rem;
             color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 1rem;
         }
 
         .poll-stats {
@@ -131,11 +166,12 @@
             gap: 2rem;
             color: rgba(79, 172, 254, 0.8);
             font-size: 1rem;
+            margin-bottom: 1rem;
         }
 
         .poll-chart {
             width: 100%;
-            height: 200px;
+            height: 150px;
             background-color: rgba(255, 255, 255, 0.1);
             border-radius: 8px;
             display: flex;
@@ -143,22 +179,6 @@
             justify-content: center;
             color: #aaa;
             font-size: 1rem;
-        }
-
-        .vote-now-button {
-            display: inline-block;
-            padding: 0.7rem 1.5rem;
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            color: #fff;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-
-        .vote-now-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
         }
 
         .search-container {
@@ -206,25 +226,153 @@
             color: rgba(255, 255, 255, 0.6);
             font-size: 1.4rem;
         }
+        .polls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+            padding: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .poll-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            height: 280px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+            cursor: pointer;
+        }
+        
+        .poll-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(79, 172, 254, 0.3);
+            box-shadow: 0 8px 32px rgba(79, 172, 254, 0.2);
+        }
+
+        .poll-image {
+            width: 100%;
+            height: 140px;
+            object-fit: cover;
+        }
+
+        .poll-content {
+            padding: 1.2rem;
+        }
+        
+        .poll-content h3 {
+            margin: 0 0 0.8rem 0;
+            font-size: 1.3rem;
+            background: linear-gradient(45deg, #fff, #e0e0e0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .poll-content p {
+            margin: 0;
+            font-size: 1rem;
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.5;
+        }
+        
+        .poll-stats {
+            margin-top: 2%;
+            font-size: 0.9rem;
+            color: rgba(79, 172, 254, 0.8);
+            font-weight: 500;
+        }
+        .user-menu {
+            position: relative;
+        }
+
+        .user-icon-container {
+            position: relative;
+        }
+
+        .user-icon {
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-icon:hover {
+            transform: scale(1.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-dropdown a {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .user-dropdown a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
     <div class="background-container">
         <header>
-            <div class="logo"><a href="#">Poll Pioneer</a></div>
+            <div class="logo">
+                <a href="../index.php">Poll Pioneer</a>
+            </div>
             <nav>
                 <ul>
                     <li><a href="../view/home.php">Home</a></li>
                     <li><a href="../view/live_poll.php">Live Polls</a></li>
                     <li><a href="../view/create_poll.php">Create Poll</a></li>
                     <li><a href="../view/results.php">Results</a></li>
-                    <li><a href="#">About</a></li>
-                    <li><a href="#">Contact</a></li>
+                    <li><a href="../view/about.php">About</a></li>
+                    <li><a href="../view/contact.php">Contact</a></li>
                 </ul>
             </nav>
-            <div class="auth-buttons">
-                <a href="../view/login.php">Login</a>
-                <a href="../view/sign-up.php">Sign Up</a>
+            <div class="user-menu">
+                <div class="user-icon-container">
+                    <i class='bx bx-user-circle user-icon' onclick="toggleUserDropdown()"></i>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <?php if(isset($_SESSION['role'])): ?>
+                            <?php if($_SESSION['role'] == 1): ?>
+                                <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                            <?php else: ?>
+                                <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                            <?php endif; ?>
+                            <a href="../view/profile.php">Profile</a>
+                            <a href="../actions/logout.php">Logout</a>
+                        <?php else: ?>
+                            <a href="../view/login.php">Login</a>
+                            <a href="../view/sign-up.php">Sign Up</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
             </div>
         </header>
 
@@ -236,120 +384,56 @@
         </div>
 
         <div class="content-container">
-            <!-- Poll 1 -->
-            <div class="poll-container">
-                <div class="poll-header">
-                    <h3>Current News Poll</h3>
-                    <a href="#" class="vote-now-button">Vote Now</a>
-                </div>
-                <p class="poll-description">Do you believe in gender roles? Vote and let's get your opinion.</p>
-                <div class="poll-stats">
-                    <span>Active Now</span>
-                    <span>500 participants</span>
-                </div>
-                <div class="poll-chart">
-                    <svg width="100%" height="100%" viewBox="0 0 100 60">
-                        <rect x="10" y="10" width="60" height="10" fill="#00f2fe" opacity="0.9"/>
-                        <rect x="10" y="30" width="40" height="10" fill="blue" opacity="0.7"/>
-                        <text x="72" y="18" fill="#fff" font-size="4">Yes: 60%</text>
-                        <text x="52" y="38" fill="#fff" font-size="4">No: 40%</text>
-                        <text x="10" y="55" fill="#fff" font-size="3">Total Votes: 500 | Active Users: 127 | Trend: ↑12%</text>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- Poll 2 -->
-            <div class="poll-container">
-                <div class="poll-header">
-                    <h3>Market Sentiment Analysis</h3>
-                    <a href="#" class="vote-now-button">Vote Now</a>
-                </div>
-                <p class="poll-description">Vote on stock market trends and see real-time insights from other users.</p>
-                <div class="poll-stats">
-                    <span>Active Now</span>
-                    <span>1.2K participants</span>
-                </div>
-                <div class="poll-chart">
-                    <svg width="100%" height="100%" viewBox="0 0 100 60">
-                        <circle cx="30" cy="30" r="20" fill="none" stroke="#00f2fe" stroke-width="20" stroke-dasharray="88 100" transform="rotate(-90 30 30)"/>
-                        <circle cx="30" cy="30" r="20" fill="none" stroke="#FFA726" stroke-width="20" stroke-dasharray="38 100" transform="rotate(-90 30 30)" stroke-dashoffset="-88"/>
-                        <text x="60" y="25" fill="#fff" font-size="4">Bullish: 70%</text>
-                        <text x="60" y="35" fill="#fff" font-size="4">Bearish: 30%</text>
-                        <text x="10" y="55" fill="#fff" font-size="3">Volume: 1.2K | Confidence: High | Trend: ↑5%</text>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- Poll 3 -->
-            <div class="poll-container">
-                <div class="poll-header">
-                    <h3>Sports Match Predictions</h3>
-                    <a href="#" class="vote-now-button">Vote Now</a>
-                </div>
-                <p class="poll-description">FC Barcelona or Real Madrid in tonight's El Clasico?</p>
-                <div class="poll-stats">
-                    <span>Active Now</span>
-                    <span>750 participants</span>
-                </div>
-                <div class="poll-chart">
-                    <svg width="100%" height="100%" viewBox="0 0 100 60">
-                        <rect x="10" y="10" width="55" height="10" fill="#00f2fe" opacity="0.9"/>
-                        <rect x="10" y="30" width="45" height="10" fill="red" opacity="0.7"/>
-                        <text x="67" y="18" fill="#fff" font-size="4">FC Barcelona: 55%</text>
-                        <text x="57" y="38" fill="#fff" font-size="4">Real Madrid: 45%</text>
-                        <text x="10" y="55" fill="#fff" font-size="3">Total Votes: 750 | Match Time: 2hrs | Trend: ↑3%</text>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- Poll 4 -->
-            <div class="poll-container">
-                <div class="poll-header">
-                    <h3>Climate Change Initiatives</h3>
-                    <a href="#" class="vote-now-button">Vote Now</a>
-                </div>
-                <p class="poll-description">Share your views on priorities for climate action and see the breakdown of opinions.</p>
-                <div class="poll-stats">
-                    <span>Active Now</span>
-                    <span>1.5K participants</span>
-                </div>
-                <div class="poll-chart">
-                    <svg width="100%" height="100%" viewBox="0 0 100 60">
-                        <rect x="10" y="10" width="70" height="8" fill="#00f2fe"/>
-                        <rect x="10" y="25" width="50" height="8" fill="#FFA726"/>
-                        <rect x="10" y="40" width="30" height="8" fill="blue"/>
-                        <text x="82" y="16" fill="#fff" font-size="3">Support: 70%</text>
-                        <text x="62" y="31" fill="#fff" font-size="3">Neutral: 50%</text>
-                        <text x="42" y="46" fill="#fff" font-size="3">Against: 30%</text>
-                        <text x="10" y="55" fill="#fff" font-size="3">Total Votes: 1.5K | Region: Global | Impact: High</text>
-                    </svg>
-                </div>
-            </div>
-
-            <!-- Poll 5 -->
-            <div class="poll-container">
-                <div class="poll-header">
-                    <h3>Workplace Preferences</h3>
-                    <a href="#" class="vote-now-button">Vote Now</a>
-                </div>
-                <p class="poll-description">Remote, hybrid, or in-office work? See the preferences across participants.</p>
-                <div class="poll-stats">
-                    <span>Active Now</span>
-                    <span>2.3K participants</span>
-                </div>
-                <div class="poll-chart">
-                    <svg width="100%" height="100%" viewBox="0 0 100 60">
-                        <rect x="10" y="10" width="70" height="10" fill="#00f2fe"/>
-                        <rect x="10" y="25" width="50" height="10" fill="#FFA726"/>
-                        <rect x="10" y="40" width="30" height="10" fill="blue"/>
-                        <text x="82" y="18" fill="#fff" font-size="3">Remote: 70%</text>
-                        <text x="62" y="33" fill="#fff" font-size="3">Hybrid: 50%</text>
-                        <text x="42" y="48" fill="#fff" font-size="3">Office: 30%</text>
-                        <text x="10" y="55" fill="#fff" font-size="3">Total Votes: 2.3K | Companies: 156 | Trend: ↑8%</text>
-                    </svg>
-                </div>
+            <div class="polls-grid">
+            <?php
+            if ($result->num_rows > 0) {
+                while ($row = $result->fetch_assoc()) {
+                    // Check if poll has an image
+                    $hasImage = !empty($row['PollImage']);
+                    $imageUrl = $hasImage ? "../actions/image.php?id=" . $row['PollID'] : "../assets/images/poll-image.jpg";
+                    ?>
+                    <a href="../view/vote.php?id=<?php echo $row['PollID']; ?>" class="poll-card">
+                        <img src="<?php echo htmlspecialchars($imageUrl); ?>" 
+                             alt="<?php echo htmlspecialchars($row['PollTitle']); ?>" 
+                             class="poll-image"
+                             onerror="this.src='../assets/images/poll-image.jpg'">
+                        <div class="poll-content">
+                            <h3><?php echo htmlspecialchars($row['PollTitle']); ?></h3>
+                            <p><?php echo htmlspecialchars($row['PollDescription']); ?></p>
+                            <div class="poll-stats">
+                                Active Now • Click to vote
+                            </div>
+                        </div>
+                    </a>
+                    <?php
+                }
+            } else {
+                echo "<p>No active polls available at the moment.</p>";
+            }
+            ?>
             </div>
         </div>
     </div>
+
+    <script>
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('user-dropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('user-dropdown');
+            const userIcon = document.querySelector('.user-icon');
+            
+            if (dropdown.classList.contains('show') && 
+                !dropdown.contains(e.target) && 
+                e.target !== userIcon) {
+                dropdown.classList.remove('show');
+            }
+        });
+    </script>
 </body>
 </html>
+
+<?php $conn->close(); ?>
