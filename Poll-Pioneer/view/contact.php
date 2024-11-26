@@ -1,3 +1,7 @@
+<?php
+session_start();
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -291,6 +295,58 @@ nav ul li a:hover {
             color: rgba(255, 255, 255, 0.8);
             font-size: 0.9rem;
         }
+        .user-menu {
+            position: relative;
+        }
+
+        .user-icon-container {
+            position: relative;
+        }
+
+        .user-icon {
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-icon:hover {
+            transform: scale(1.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-dropdown a {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .user-dropdown a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -309,9 +365,28 @@ nav ul li a:hover {
             <li><a href="../view/contact.php">Contact</a></li>
         </ul>
     </nav>
-    <div class="auth-buttons">
-        <a href="../view/login.php">Login</a>
-        <a href="../view/sign-up.php">Sign Up</a>
+    <div class="user-menu">
+        <?php if(isset($_SESSION['user_id'])): ?>
+            <div class="user-icon-container">
+                <i class='bx bx-user-circle user-icon' id="userIcon"></i>
+                <div id="user-dropdown" class="user-dropdown">
+                    <?php if(isset($_SESSION['role'])): ?>
+                        <?php if($_SESSION['role'] == 1): ?>
+                            <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                        <?php else: ?>
+                            <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                        <?php endif; ?>
+                        
+                        <a href="../actions/logout.php">Logout</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="auth-buttons">
+                <a href="../view/login.php">Login</a>
+                <a href="../view/sign-up.php">Sign Up</a>
+            </div>
+        <?php endif; ?>
     </div>
 </header>
         <div class="container">
@@ -349,5 +424,27 @@ nav ul li a:hover {
             </section>
         </div>
     </div>
+    <script>
+    // Get references to the user icon and dropdown
+    const userIcon = document.getElementById('userIcon');
+    const userDropdown = document.getElementById('user-dropdown');
+
+    // Toggle dropdown when user icon is clicked
+    userIcon.addEventListener('click', function(e) {
+        e.stopPropagation(); // Prevent event from propagating to window
+        userDropdown.classList.toggle('show');
+    });
+
+    // Close dropdown when clicking outside
+    window.addEventListener('click', function(e) {
+        // Check if the dropdown is currently shown
+        if (userDropdown.classList.contains('show')) {
+            // Check if the click is outside the dropdown and user icon
+            if (!userDropdown.contains(e.target) && e.target !== userIcon) {
+                userDropdown.classList.remove('show');
+            }
+        }
+    });
+</script>
 </body>
 </html>

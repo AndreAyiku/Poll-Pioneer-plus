@@ -416,23 +416,67 @@ $result = $conn->query($sql);
     </div>
 
     <script>
-        function toggleUserDropdown() {
-            const dropdown = document.getElementById('user-dropdown');
-            dropdown.classList.toggle('show');
-        }
+    function toggleUserDropdown() {
+        const dropdown = document.getElementById('user-dropdown');
+        dropdown.classList.toggle('show');
+    }
 
-        // Close dropdown when clicking outside
-        window.addEventListener('click', function(e) {
-            const dropdown = document.getElementById('user-dropdown');
-            const userIcon = document.querySelector('.user-icon');
-            
-            if (dropdown.classList.contains('show') && 
-                !dropdown.contains(e.target) && 
-                e.target !== userIcon) {
-                dropdown.classList.remove('show');
+    // Close dropdown when clicking outside
+    window.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('user-dropdown');
+        const userIcon = document.querySelector('.user-icon');
+        
+        if (dropdown.classList.contains('show') && 
+            !dropdown.contains(e.target) && 
+            e.target !== userIcon) {
+            dropdown.classList.remove('show');
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.querySelector('.search-input');
+        const pollCards = document.querySelectorAll('.poll-card');
+
+        searchInput.addEventListener('input', function() {
+            const searchTerm = this.value.toLowerCase().trim();
+
+            pollCards.forEach(card => {
+                const titleElement = card.querySelector('h3');
+                const descriptionElement = card.querySelector('p');
+
+                const title = titleElement.textContent.toLowerCase();
+                const description = descriptionElement.textContent.toLowerCase();
+
+                // Check if search term matches title or description
+                if (title.includes(searchTerm) || description.includes(searchTerm)) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            // Show a message if no polls match the search
+            const visibleCards = Array.from(pollCards).filter(card => card.style.display !== 'none');
+            const noResultsMessage = document.getElementById('no-results');
+
+            if (visibleCards.length === 0) {
+                if (!noResultsMessage) {
+                    const message = document.createElement('p');
+                    message.id = 'no-results';
+                    message.textContent = 'No polls match your search.';
+                    message.style.color = 'white';
+                    message.style.textAlign = 'center';
+                    message.style.width = '100%';
+                    
+                    const pollsGrid = document.querySelector('.polls-grid');
+                    pollsGrid.appendChild(message);
+                }
+            } else if (noResultsMessage) {
+                noResultsMessage.remove();
             }
         });
-    </script>
+    });
+</script>
 </body>
 </html>
 

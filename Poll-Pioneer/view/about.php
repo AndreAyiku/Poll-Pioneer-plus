@@ -423,48 +423,52 @@ session_start();
                         <h3>Analytics</h3>
                         <p>Access detailed insights and analytics to understand your audience better.</p>
                     </div>
-                </div>
-            </section>
+                    </div>
+        </section>
 
-            <section class="about-section">
-                <h2>How Does it Work?</h2>
-                <ol>
-                    <li>Sign up for a free account to access all features</li>
-                    <li>Create your first poll using our intuitive interface</li>
-                    <li>Share your poll with your audience</li>
-                    <li>Monitor responses and analyze results in real-time</li>
-                </ol>
-            </section>
+        <section class="about-section">
+            <h2>How Does it Work?</h2>
+            <ol>
+                <li>Sign up for a free account to access all features</li>
+                <li>Create your first poll using our intuitive interface</li>
+                <li>Share your poll with your audience</li>
+                <li>Monitor responses and analyze results in real-time</li>
+            </ol>
+        </section>
 
-            <section class="about-section">
-                <h2>Join Our Community</h2>
-                <p>Be part of a growing community where every opinion matters. Start creating and participating in polls today!</p>
-                <div class="contact-card" style="text-align: center; max-width: 400px; margin: 2rem auto;">
-                    <i class='bx bx-user-plus'></i>
-                    <h3>Get Started Now</h3>
-                    <p>Create your account and begin your polling journey</p>
-                    <a href="sign-up.php">Sign Up Free</a>
-                </div>
-            </section>
-        </div>
+        <section class="about-section">
+            <h2>Join Our Community</h2>
+            <p>Be part of a growing community where every opinion matters. Start creating and participating in polls today!</p>
+            <div class="contact-card" style="text-align: center; max-width: 400px; margin: 2rem auto;">
+                <i class='bx bx-user-plus'></i>
+                <h3>Get Started Now</h3>
+                <p>Create your account and begin your polling journey</p>
+                <a href="sign-up.php">Sign Up Free</a>
+            </div>
+        </section>
     </div>
-    <script>
-        function toggleUserDropdown() {
-            const dropdown = document.getElementById('user-dropdown');
-            dropdown.classList.toggle('show');
-        }
+</div>
+<script>
+    // Get references to the user icon and dropdown
+    const userIcon = document.getElementById('userIcon');
+    const userDropdown = document.getElementById('user-dropdown');
 
-        // Close dropdown when clicking outside
-        window.addEventListener('click', function(e) {
-            const dropdown = document.getElementById('user-dropdown');
-            const userIcon = document.querySelector('.user-icon');
-            
-            if (dropdown.classList.contains('show') && 
-                !dropdown.contains(e.target) && 
-                e.target !== userIcon) {
-                dropdown.classList.remove('show');
+    // Toggle dropdown when user icon is clicked
+    userIcon.addEventListener('click', function(e) {
+        e.stopPropagation(); // Prevent event from propagating to window
+        userDropdown.classList.toggle('show');
+    });
+
+    // Close dropdown when clicking outside
+    window.addEventListener('click', function(e) {
+        // Check if the dropdown is currently shown
+        if (userDropdown.classList.contains('show')) {
+            // Check if the click is outside the dropdown and user icon
+            if (!userDropdown.contains(e.target) && e.target !== userIcon) {
+                userDropdown.classList.remove('show');
             }
-        });
+        }
+    });
 </script>
 </body>
 </html>
