@@ -1,10 +1,25 @@
+<?php
+// Start session for authentication
+session_start();
+include '../actions/home_backend.php';
+
+// Handle search functionality
+$searchQuery = isset($_GET['search']) ? trim($_GET['search']) : '';
+if (!empty($searchQuery)) {
+    $explorePolls = array_filter($explorePolls, function($poll) use ($searchQuery) {
+        return stripos($poll['title'], $searchQuery) !== false || 
+               stripos($poll['description'], $searchQuery) !== false;
+    });
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Poll Pioneer - Sections</title>
-    <link rel = "icon" type= "image/x-icon" href="../assests/images/voting-box.ico">
+    <title>Poll Pioneer - Explore Polls</title>
+    <link rel="icon" type="image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         body, html {
@@ -261,6 +276,123 @@
         .content-container {
             padding: 2rem;
         }
+        .user-menu {
+            position: relative;
+        }
+
+        .user-icon-container {
+            position: relative;
+        }
+
+        .user-icon {
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-icon:hover {
+            transform: scale(1.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-dropdown a {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .user-dropdown a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
+    
+        /* Keep the existing styles, but modify the content area */
+        .content-container {
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 5rem; /* Add this line */
+        }
+        
+        .polls-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            width: 100%;
+        }
+        
+        .search-container {
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 2rem;
+        }
+        
+        .search-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        
+        .search-input {
+            width: 100%;
+            padding: 1rem 1rem 1rem 3.5rem;
+            font-size: 1.1rem;
+            border: none;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .search-icon {
+            position: absolute;
+            left: 1.2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.4rem;
+        }
+        
+        .no-results {
+            color: rgba(255, 255, 255, 0.7);
+            text-align: center;
+            width: 100%;
+            padding: 2rem;
+            font-size: 1.2rem;
+        }
+        .polls-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1.5rem;
+            padding: 2rem;
+        }
     </style>
 </head>
 <body>
@@ -279,282 +411,97 @@
                     <li><a href="../view/contact.php">Contact</a></li>
                 </ul>
             </nav>
-            <div class="auth-buttons">
-                <a href="../view/login.php">Login</a>
-                <a href="../view/sign-up.php">Sign Up</a>
+            <div class="user-menu">
+                <?php if(isset($_SESSION['user_id'])): ?>
+                    <div class="user-icon-container">
+                        <i class='bx bx-user-circle user-icon' onclick="toggleUserDropdown()"></i>
+                        <div id="user-dropdown" class="user-dropdown">
+                            <?php if(isset($_SESSION['role'])): ?>
+                                <?php if($_SESSION['role'] == 1): ?>
+                                    <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                                <?php else: ?>
+                                    <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                                <?php endif; ?>
+                                
+                                <a href="../actions/logout.php">Logout</a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="auth-buttons">
+                        <a href="../view/login.php">Login</a>
+                        <a href="../view/sign-up.php">Sign Up</a>
+                    </div>
+                <?php endif; ?>
             </div>
         </header>
 
-        <div class="search-container">
-            <div class="search-wrapper">
-                <i class='bx bx-search search-icon'></i>
-                <input type="text" class="search-input" placeholder="Search polls, topics, or categories...">
-            </div>
-        </div>
-
         <div class="content-container">
-            <!-- Sections -->
-            <div id="explore-section" class="section">
-                <div class="section-header">
-                    <h2>Explore</h2>
-                    <a href="#" class="see-more">See More</a>
+            <!-- Search Bar -->
+            <div class="search-container">
+                <div class="search-wrapper">
+                    <i class='bx bx-search search-icon'></i>
+                    <form action="" method="GET">
+                        <input 
+                            type="text" 
+                            name="search" 
+                            class="search-input" 
+                            placeholder="Search polls by title or description"
+                            value="<?php echo htmlspecialchars($searchQuery); ?>"
+                        >
+                    </form>
                 </div>
-                <div class="scroll-container"></div>
             </div>
 
-            <div id="live-polls-section" class="section">
-                <div class="section-header">
-                    <h2>Live Polls</h2>
-                    <a href="../view/live_poll.php" class="see-more">See More</a>
-                </div>
-                <div class="scroll-container"></div>
-            </div>
-
-            <div id="continue-polls-section" class="section">
-                <div class="section-header">
-                    <h2>Continue Polls</h2>
-                    <a href="#" class="see-more">See More</a>
-                </div>
-                <div class="scroll-container"></div>
-            </div>
-
-            <div id="results-section" class="section">
-                <div class="section-header">
-                    <h2>Results</h2>
-                    <a href="../view/results.php" class="see-more">See More</a>
-                </div>
-                <div class="scroll-container"></div>
+            <!-- Polls Grid -->
+            <div class="polls-container">
+                <?php if (!empty($explorePolls)): ?>
+                    <?php foreach ($explorePolls as $poll): ?>
+                        <a href="../view/vote.php?id=<?php echo $poll['id']; ?>" class="poll-card">
+                            <img src="<?php echo htmlspecialchars($poll['image']); ?>" 
+                                alt="<?php echo htmlspecialchars($poll['title']); ?>" 
+                                class="poll-image"
+                                onerror="this.src='../assets/images/poll-image.jpg'">
+                            <div class="poll-content">
+                                <h3><?php echo htmlspecialchars($poll['title']); ?></h3>
+                                <p><?php echo htmlspecialchars($poll['description']); ?></p>
+                                <div class="poll-stats">
+                                    <?php echo htmlspecialchars($poll['stats']); ?>
+                                </div>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="no-results">
+                        <?php echo $searchQuery 
+                            ? "No polls found matching '" . htmlspecialchars($searchQuery) . "'" 
+                            : "No polls available at the moment."; 
+                        ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
 
     <script>
-        // Poll data structure
-        const pollData = {
-            explore: [
-                {
-                    id: 1,
-                    title: "Technology Trends 2024",
-                    description: "Vote on the most impactful tech trends of the year",
-                    image: "../assests/images/tech.jpg",
-                    stats: "1.2K votes • Ends in 2 days",
-                    category: "explore"
-                },
-                {
-                    id: 2,
-                    title: "Global Climate Action",
-                    description: "Share your views on climate change initiatives",
-                    image: "../assests/images/climate.jpg",
-                    stats: "3.5K votes • Ends in 5 days",
-                    category: "explore"
-                },
-                {
-                    id: 3,
-                    title: "Future of Work",
-                    description: "Remote vs hybrid vs office - what works best?",
-                    image: "../assests/images/office.jpg",
-                    stats: "2.8K votes • Ends in 3 days",
-                    category: "explore"
-                }
-            ],
-            livePolls: [
-                {
-                    id: 4,
-                    title: "Current Events Poll",
-                    description: "Live voting on today's breaking news",
-                    image: "../assests/images/events.jpg",
-                    stats: "Active Now • 245 participants",
-                    category: "live"
-                },
-                {
-                    id: 5,
-                    title: "Sports Match Predictions",
-                    description: "Vote on tonight's game outcomes",
-                    image: "../assests/images/sports.jpg",
-                    stats: "Active Now • 1.3K participants",
-                    category: "live"
-                }
-            ],
-            customPolls: [
-                {
-                    id: 6,
-                    title: "Company Culture Survey",
-                    description: "Private poll for employees only",
-                    image: "../assests/images/company.jpg",
-                    stats: "Private • 50 participants",
-                    category: "custom"
-                },
-                {
-                    id: 7,
-                    title: "Event Planning Poll",
-                    description: "Help decide the next meetup details",
-                    image: "../assests/images/events.jpg",
-                    stats: "Group Poll • 28 participants",
-                    category: "custom"
-                }
-            ],
-            continuePolls: [
-                {
-                    id: 8,
-                    title: "City Development Project",
-                    description: "Phase 2 voting now open",
-                    image: "../assests/images/city.jpg",
-                    stats: "You voted in Phase 1 • Continue to Phase 2",
-                    category: "continue"
-                }
-            ],
-            results: [
-                {
-                    id: 9,
-                    title: "2024 Tech Predictions",
-                    description: "See how your predictions compared",
-                    image: "/api/placeholder/300/140",
-                    stats: "Final Results • 10.2K participants",
-                    category: "results"
-                },
-                {
-                    id: 10,
-                    title: "Community Project Vote",
-                    description: "View the winning proposals",
-                    image: "/api/placeholder/300/140",
-                    stats: "Results Published • 3.4K votes",
-                    category: "results"
-                }
-            ]
-        };
-
-        // Function to create a single poll card
-        function createPollCard(poll) {
-            const card = document.createElement('div');
-            card.className = 'poll-card';
-            card.innerHTML = `
-                
-                <div class="poll-content">
-                    <h3>${poll.title}</h3>
-                    <p>${poll.description}</p>
-                    <div class="poll-stats">${poll.stats}</div>
-                    <img src="${poll.image}" alt="${poll.title}" class="poll-image">
-                </div>
-            `;
-            
-            // Add click event listener
-            card.addEventListener('click', () => handlePollClick(poll));
-            
-            return card;
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('user-dropdown');
+            dropdown.classList.toggle('show');
         }
 
-        // Function to handle poll card clicks
-        function handlePollClick(poll) {
-            console.log(`Poll clicked:`, poll);
-        }
-
-        // Function to populate a section with polls
-        function populateSection(sectionId, polls) {
-            const section = document.querySelector(`#${sectionId} .scroll-container`);
-            if (!section) return;
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('user-dropdown');
+            const userIcon = document.querySelector('.user-icon');
             
-            section.innerHTML = ''; // Clear existing content
-            polls.forEach(poll => {
-                section.appendChild(createPollCard(poll));
-            });
-        }
-
-        // Function to add a new poll
-        function addNewPoll(category, newPoll) {
-            // Ensure the category exists in pollData
-            if (!pollData[category]) {
-                pollData[category] = [];
+            if (dropdown.classList.contains('show') && 
+                !dropdown.contains(e.target) && 
+                e.target !== userIcon) {
+                dropdown.classList.remove('show');
             }
-
-            // Add the new poll to the appropriate category
-            pollData[category].push({
-                ...newPoll,
-                id: generateUniqueId(),
-                category: category
-            });
-
-            // Refresh the section display
-            populateSection(`${category}-section`, pollData[category]);
-        }
-
-        // Function to update an existing poll
-        function updatePoll(category, updatedPoll) {
-            const polls = pollData[category];
-            if (!polls) return;
-
-            const index = polls.findIndex(poll => poll.id === updatedPoll.id);
-            if (index !== -1) {
-                polls[index] = { ...polls[index], ...updatedPoll };
-                populateSection(`${category}-section`, polls);
-            }
-        }
-
-        // Function to delete a poll
-        function deletePoll(category, pollId) {
-            const polls = pollData[category];
-            if (!polls) return;
-
-            const index = polls.findIndex(poll => poll.id === pollId);
-            if (index !== -1) {
-                polls.splice(index, 1);
-                populateSection(`${category}-section`, polls);
-            }
-        }
-
-        // Function to generate a unique ID
-        function generateUniqueId() {
-            return Date.now().toString(36) + Math.random().toString(36).substr(2);
-        }
-
-        // Function to filter polls
-        function filterPolls(searchTerm) {
-            searchTerm = searchTerm.toLowerCase();
-            
-            Object.keys(pollData).forEach(category => {
-                const filteredPolls = pollData[category].filter(poll => 
-                    poll.title.toLowerCase().includes(searchTerm) ||
-                    poll.description.toLowerCase().includes(searchTerm)
-                );
-                populateSection(`${category}-section`, filteredPolls);
-            });
-        }
-
-        // Initialize search functionality
-        document.querySelector('.search-input').addEventListener('input', (e) => {
-            filterPolls(e.target.value);
         });
-
-        // Initialize all sections when the document is loaded
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize each section
-            populateSection('explore-section', pollData.explore);
-            populateSection('live-polls-section', pollData.livePolls);
-            populateSection('custom-polls-section', pollData.customPolls);
-            populateSection('continue-polls-section', pollData.continuePolls);
-            populateSection('results-section', pollData.results);
-        });
-
-        // Example usage:
-        /*
-        // Add a new poll
-        const newPoll = {
-            title: "New Technology Survey",
-            description: "Share your thoughts on emerging tech",
-            image: "/api/placeholder/300/140",
-            stats: "New • 0 participants"
-        };
-        addNewPoll('explore', newPoll);
-
-        // Update an existing poll
-        const updatedPoll = {
-            id: 1,
-            stats: "1.5K votes • Ends in 1 day"
-        };
-        updatePoll('explore', updatedPoll);
-
-        // Delete a poll
-        deletePoll('explore', 1);
-        */
     </script>
 </body>
 </html>
+
+<?php $conn->close(); ?>

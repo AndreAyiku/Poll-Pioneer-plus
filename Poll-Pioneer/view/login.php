@@ -1,3 +1,12 @@
+<?php
+session_start();
+
+// Add this block at the top of the login page
+$error_message = isset($_SESSION['error']) ? $_SESSION['error'] : null;
+if ($error_message) {
+    unset($_SESSION['error']); // Clear the error after retrieving it
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,10 +89,24 @@
 </head>
 <body>
     <div class="wrapper">
+        <!-- Error Message Display -->
+        <?php if ($error_message): ?>
+            <div class="error-message" style="
+                background-color: #f8d7da;
+                color: #721c24;
+                padding: 15px;
+                margin-bottom: 20px;
+                border-radius: 5px;
+                text-align: center;
+            ">
+                <?php echo htmlspecialchars($error_message); ?>
+            </div>
+        <?php endif; ?>
+
         <h1>Login</h1>
         <form action="../actions/login_user.php" method="POST">
             <div class="input-box">
-                <input type="email" id="email" placeholder="Username" name="email" required>
+                <input type="email" id="email" placeholder="Email" name="email" required>
                 <i class='bx bx-user-circle'></i>
                 <div id="emailError" class="error"></div>
             </div>
@@ -96,10 +119,6 @@
 
             <button type="submit" class="button">Login</button>
 
-            <div class="remember">
-                <input type="checkbox" id="rememberMe" name="rememberMe">
-                <label for="rememberMe">Remember me</label>
-            </div>
 
             <div class="signup-link">
                 Don't have an account? <a href="../view/sign-up.php">Sign Up</a>
@@ -143,7 +162,7 @@
         }
 
         function CheckPassword(inputtxt) { 
-            var passw = /^(?=.*\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; 
+            var passw = /^(?=.*\\d)(?=.*[a-z])(?=.*[A-Z]).{6,20}$/; 
             if(inputtxt.value.match(passw)) { 
                 return true;
             } else { 
@@ -153,5 +172,3 @@
     </script>
 </body>
 </html>
-        
-   

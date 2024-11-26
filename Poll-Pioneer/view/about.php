@@ -1,10 +1,13 @@
-<!-- about.php -->
+<?php
+session_start();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>About Poll Pioneer</title>
+    <link rel="icon" type="image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
     body, html {
@@ -228,72 +231,126 @@
             margin-bottom: 0.5rem;
         }
 
-            .feature-card p {
-                color: rgba(255, 255, 255, 0.8);
-                font-size: 0.9rem;
-            }
-            header {
-        background-color: rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(10px);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        padding: 1rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-    }
+        .feature-card p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9rem;
+        }
+        
+        header {
+            background-color: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+        
+        .logo a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(79, 172, 254, 0.5);
+        }
+        
+        nav ul {
+            list-style-type: none;
+            display: flex;
+            gap: 2rem;
+            padding: 0;
+        }
+        
+        nav ul li a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+        
+        nav ul li a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .auth-buttons a {
+            color: #1a1a2e;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            padding: 0.7rem 1.5rem;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-left: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .auth-buttons a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
 
-    .logo a {
-        color: #fff;
-        text-decoration: none;
-        font-size: 2rem;
-        font-weight: bold;
-        background: linear-gradient(45deg, #00f2fe, #4facfe);
-        -webkit-background-clip: text;
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-shadow: 0 0 30px rgba(79, 172, 254, 0.5);
-    }
+        .user-menu {
+            position: relative;
+        }
 
-    nav ul {
-        list-style-type: none;
-        display: flex;
-        gap: 2rem;
-        padding: 0;
-    }
+        .user-icon-container {
+            position: relative;
+        }
 
-    nav ul li a {
-        color: #fff;
-        text-decoration: none;
-        font-size: 1.1rem;
-        transition: all 0.3s ease;
-        padding: 0.5rem 1rem;
-        border-radius: 8px;
-    }
+        .user-icon {
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
 
-    nav ul li a:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: translateY(-2px);
-    }
+        .user-icon:hover {
+            transform: scale(1.1);
+            color: #4facfe;
+        }
 
-    .auth-buttons a {
-        color: #1a1a2e;
-        background: linear-gradient(45deg, #00f2fe, #4facfe);
-        padding: 0.7rem 1.5rem;
-        text-decoration: none;
-        border-radius: 8px;
-        margin-left: 1rem;
-        font-weight: 600;
-        transition: all 0.3s ease;
-    }
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
 
-    .auth-buttons a:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
-    }
-        </style>
+        .user-dropdown a {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .user-dropdown a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
+    </style>
 </head>
 <body>
     <div class="background-container">
@@ -311,9 +368,28 @@
             <li><a href="../view/contact.php">Contact</a></li>
         </ul>
     </nav>
-    <div class="auth-buttons">
-        <a href="../view/login.php">Login</a>
-        <a href="../view/sign-up.php">Sign Up</a>
+    <div class="user-menu">
+        <?php if(isset($_SESSION['user_id'])): ?>
+            <div class="user-icon-container">
+                <i class='bx bx-user-circle user-icon' id="userIcon"></i>
+                <div id="user-dropdown" class="user-dropdown">
+                    <?php if(isset($_SESSION['role'])): ?>
+                        <?php if($_SESSION['role'] == 1): ?>
+                            <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                        <?php else: ?>
+                            <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                        <?php endif; ?>
+                        
+                        <a href="../actions/logout.php">Logout</a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="auth-buttons">
+                <a href="../view/login.php">Login</a>
+                <a href="../view/sign-up.php">Sign Up</a>
+            </div>
+        <?php endif; ?>
     </div>
 </header>
         <div class="container">
@@ -323,7 +399,7 @@
                     <p>Your ultimate platform for creating, participating in, and exploring polls and surveys. Join our community where every voice matters and every vote counts.</p>
                 </div>
                 <div class="hero-image">
-                    <img src="../assests/images/about-hero.jpg" alt="Poll Pioneer Platform">
+                    <img src="../assests/images/about.jpg" alt="Poll Pioneer Platform">
                 </div>
             </section>
 
@@ -372,5 +448,23 @@
             </section>
         </div>
     </div>
+    <script>
+        function toggleUserDropdown() {
+            const dropdown = document.getElementById('user-dropdown');
+            dropdown.classList.toggle('show');
+        }
+
+        // Close dropdown when clicking outside
+        window.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('user-dropdown');
+            const userIcon = document.querySelector('.user-icon');
+            
+            if (dropdown.classList.contains('show') && 
+                !dropdown.contains(e.target) && 
+                e.target !== userIcon) {
+                dropdown.classList.remove('show');
+            }
+        });
+</script>
 </body>
 </html>

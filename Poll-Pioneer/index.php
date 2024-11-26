@@ -1,69 +1,111 @@
+<?php
+session_start();
+
+// Check for logout message
+if(isset($_SESSION['logout_message'])) {
+    echo '<div class="alert alert-success" style="background-color: rgba(0, 255, 0, 0.2); color: white; padding: 15px; text-align: center; margin-bottom: 20px;">' . 
+         htmlspecialchars($_SESSION['logout_message']) . 
+         '</div>';
+    
+    // Clear the message so it's not shown again on refresh
+    unset($_SESSION['logout_message']);
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poll Pioneer - Home</title>
-    <link rel = "icon" type= "image/x-icon" href="../assests/images/voting-box.ico">
+    <link rel="icon" type="image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         body, html {
             margin: 0;
             padding: 0;
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             color: #fff;
             height: 100%;
-            overflow: hidden;
         }
+        
         .background-container {
-            background: linear-gradient(135deg, #f2f2f2, #a6a6a6, #4d4d4d, #1a1a1a);
+            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460, #533483);
             background-size: 400% 400%;
             animation: gradient 15s ease infinite;
-            height: 100%;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            position: relative;
         }
+        
         @keyframes gradient {
             0% {background-position: 0% 50%;}
             50% {background-position: 100% 50%;}
             100% {background-position: 0% 50%;}
         }
+        
         header {
-            background-color: rgba(0, 0, 0, 0.7);
-            color: #fff;
+            background-color: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             padding: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            z-index: 1;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
+        
         .logo a {
             color: #fff;
             text-decoration: none;
-            font-size: 1.8rem;
+            font-size: 2rem;
             font-weight: bold;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(79, 172, 254, 0.5);
         }
+        
         nav ul {
             list-style-type: none;
             display: flex;
-            gap: 1rem;
+            gap: 2rem;
             padding: 0;
         }
+        
         nav ul li a {
             color: #fff;
             text-decoration: none;
             font-size: 1.1rem;
-        }
-        .auth-buttons a {
-            color: #000;
-            background-color: #fff;
+            transition: all 0.3s ease;
             padding: 0.5rem 1rem;
-            text-decoration: none;
-            border-radius: 5px;
-            margin-left: 1rem;
-            font-weight: bold;
+            border-radius: 8px;
         }
+        
+        nav ul li a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        .auth-buttons a {
+            color: #1a1a2e;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            padding: 0.7rem 1.5rem;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-left: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        
+        .auth-buttons a:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+        
         .main-content {
             flex-grow: 1;
             display: flex;
@@ -72,37 +114,55 @@
             text-align: center;
             padding: 2rem;
         }
+        
         .text-content {
             max-width: 800px;
-            background-color: rgba(0, 0, 0, 0.6);
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
             padding: 2rem;
-            border-radius: 10px;
         }
+        
         .text-content h1 {
             font-size: 3.5rem;
             margin-bottom: 0.5rem;
-            font-weight: bold;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
+        
         .text-content h2 {
             font-size: 2rem;
             margin-bottom: 1rem;
-            font-weight: normal;
+            color: rgba(255, 255, 255, 0.8);
         }
+        
         .text-content p {
             font-size: 1.2rem;
             margin-bottom: 2rem;
             line-height: 1.6;
+            color: rgba(255, 255, 255, 0.8);
         }
+        
         .cta-button {
             display: inline-block;
-            background-color: #fff;
-            color: #000;
+            color: #1a1a2e;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
             padding: 1rem 2rem;
             text-decoration: none;
-            border-radius: 5px;
-            font-weight: bold;
+            border-radius: 8px;
+            font-weight: 600;
             font-size: 1.2rem;
+            transition: all 0.3s ease;
         }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
+        }
+        
         .socials {
             position: absolute;
             bottom: 20px;
@@ -111,14 +171,17 @@
             gap: 15px;
             z-index: 1;
         }
-        .socials i {
-            font-size: 24px;
-            color: #fff;
-            cursor: pointer;
-            transition: color 0.3s ease;
+        
+        .socials a {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 2rem;
+            transition: all 0.3s ease;
+            text-decoration: none;
         }
-        .socials i:hover {
-            color: #a6a6a6;
+        
+        .socials a:hover {
+            color: #4facfe;
+            transform: translateY(-2px);
         }
     </style>
 </head>
@@ -126,7 +189,7 @@
     <div class="background-container">
         <header>
             <div class="logo">
-                <a href="../Poll-Pioneer/index.php">Poll Pioneer</a>
+                <a href="../index.php">Poll Pioneer</a>
             </div>
             <nav>
                 <ul>
@@ -154,12 +217,9 @@
         </div>
 
         <div class="socials">
-            <i class='bx bxl-twitter' data-tooltip="Twitter"></i>
-            <i class='bx bxl-instagram' data-tooltip="Instagram"></i>
-            <i class='bx bxl-snapchat' data-tooltip="Snapchat"></i>
-            <i class='bx bxl-facebook' data-tooltip="Facebook"></i>
-            <i class='bx bxl-reddit' data-tooltip="Reddit"></i>
-            <i class='bx bxl-tiktok' data-tooltip="TikTok"></i>
+            <a href="https://www.instagram.com/poll_pioneer" target="_blank"><i class='bx bxl-instagram'></i></a>
+            <a href="https://twitter.com/PollPioneer1" target="_blank"><i class='bx bxl-twitter'></i></a>
+            <a href="https://snapchat.com/t/6avFJgBG" target="_blank"><i class='bx bxl-snapchat'></i></a>
         </div>
     </div>
 </body>

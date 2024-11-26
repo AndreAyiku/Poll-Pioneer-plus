@@ -440,7 +440,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <nav>
         <ul>
             <li><a href="../view/home.php">Home</a></li>
-            <li><a href="../view/live_polls.php">Live Polls</a></li>
+            <li><a href="../view/live_poll.php">Live Polls</a></li>
             <li><a href="../view/create_poll.php">Create Poll</a></li>
             <li><a href="../view/results.php">Results</a></li>
             <li><a href="../view/about.php">About</a></li>
@@ -457,7 +457,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <?php else: ?>
                         <a href="../view/admin/User_dashboard.php">User Dashboard</a>
                     <?php endif; ?>
-                    <a href="../view/profile.php">Profile</a>
+                   
                     <a href="../actions/logout.php">Logout</a>
                 <?php else: ?>
                     <a href="../view/login.php">Login</a>

@@ -365,7 +365,7 @@ $result = $conn->query($sql);
                             <?php else: ?>
                                 <a href="../view/admin/User_dashboard.php">User Dashboard</a>
                             <?php endif; ?>
-                            <a href="../view/profile.php">Profile</a>
+                            
                             <a href="../actions/logout.php">Logout</a>
                         <?php else: ?>
                             <a href="../view/login.php">Login</a>

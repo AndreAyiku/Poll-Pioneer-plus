@@ -197,6 +197,13 @@ function fetchPollResults($conn, $poll_id, $user_id) {
 // Handle different request types
 $action = isset($_GET['action']) ? $_GET['action'] : 'list';
 
+if ($action == 'details' && !isset($_SESSION['user_id'])) {
+    $_SESSION['error'] = "You must be logged in to view poll results.";
+    $_SESSION['redirect_after_login'] = "results.php?action=details&id=" . (isset($_GET['id']) ? $_GET['id'] : '');
+    header("Location: ../view/login.php");
+    exit();
+}
+
 switch($action) {
     case 'list':
         // Fetch and display all polls
@@ -211,7 +218,7 @@ switch($action) {
 
     default:
         $_SESSION['error'] = "Invalid request.";
-        header("Location: ../view/dashboard.php");
+        header("Location: ../view/live_poll.php");
         exit();
 }
 ?>
@@ -227,84 +234,136 @@ switch($action) {
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         /* Reuse styles from previous results page with some modifications */
-        body, html {
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #fff;
-            height: 100%;
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --accent-primary: #4facfe;
+            --accent-secondary: #00f2fe;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255,255,255,0.7);
         }
 
-        .background-container {
-            background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460, #533483);
-            background-size: 400% 400%;
-            animation: gradient 15s ease infinite;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+            color: var(--text-primary);
             min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
             padding: 2rem;
         }
 
-        @keyframes gradient {
-            0% {background-position: 0% 50%;}
-            50% {background-position: 100% 50%;}
-            100% {background-position: 0% 50%;}
-        }
+        /* Header Styles */
+        
 
-        .polls-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 2rem;
-        }
-
-        .poll-card {
-            background: rgba(0, 0, 0, 0.2);
+        header {
+            background-color: rgba(0, 0, 0, 0.2);
             backdrop-filter: blur(10px);
-            border-radius: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1.5rem;
-            transition: transform 0.3s ease;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .poll-card:hover {
-            transform: scale(1.05);
-        }
-
-        .poll-card-header {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
-        .poll-card-title {
-            font-size: 1.5rem;
-            background: linear-gradient(45deg, #fff, #e0e0e0);
+        .logo a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(79, 172, 254, 0.5);
         }
 
-        .poll-card-description {
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 1rem;
-            flex-grow: 1;
-        }
-
-        .poll-card-footer {
+        nav ul {
+            list-style-type: none;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            gap: 2rem;
+            padding: 0;
+        }
+        
+        nav ul li a {
+            color: #fff;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: all 0.3s ease;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+        }
+        
+        nav ul li a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: translateY(-2px);
         }
 
-        .total-votes {
-            color: rgba(79, 172, 254, 0.8);
+        .user-menu {
+            position: relative;
         }
 
+        .user-icon-container {
+            position: relative;
+        }
+
+        .user-icon {
+            font-size: 2rem;
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .user-icon:hover {
+            transform: scale(1.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            min-width: 200px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            padding: 0.5rem 0;
+            margin-top: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .user-dropdown a {
+            display: block;
+            color: #fff;
+            text-decoration: none;
+            padding: 0.7rem 1.2rem;
+            transition: all 0.3s ease;
+        }
+
+        .user-dropdown a:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #4facfe;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
         .view-results-btn {
             background: linear-gradient(45deg, #00f2fe, #4facfe);
             color: white;
@@ -320,168 +379,253 @@ switch($action) {
             cursor: not-allowed;
         }
 
-        .result-restriction-note {
-            color: rgba(255, 255, 255, 0.6);
-            font-size: 0.8rem;
+        /* Card Styles */
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 0.5rem;
+        }
+
+        .card-title {
+            font-size: 1.5rem;
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        /* Results Grid */
+        .results-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+        }
+
+        .result-item {
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .result-item-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+        }
+
+        .result-item-title {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .result-percentage {
+            color: var(--accent-primary);
+        }
+
+        .result-bar {
+            height: 10px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 5px;
+            overflow: hidden;
             margin-top: 0.5rem;
         }
 
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
+        .result-bar-fill {
             height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.7);
-            justify-content: center;
-            align-items: center;
+            background: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
         }
 
-        .modal-content {
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(15px);
-            border-radius: 20px;
-            width: 80%;
-            max-width: 1000px;
-            padding: 2rem;
-            position: relative;
-        }
-
-        .close-modal {
-            position: absolute;
-            top: 1rem;
-            right: 1rem;
-            color: white;
-            font-size: 2rem;
-            cursor: pointer;
-        }
-
+        /* Chart Containers */
         .chart-container {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 2rem;
+            gap: 1rem;
         }
 
-        .results-nav {
+        .chart-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+        }
+
+        /* Responsive Adjustments */
+        @media (max-width: 768px) {
+            .chart-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Navigation and Interaction Styles */
+        .chart-nav {
             display: flex;
             justify-content: center;
             margin-bottom: 1rem;
         }
 
-        .results-nav button {
-            margin: 0 0.5rem;
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
+        .chart-nav button {
+            background: rgba(255,255,255,0.1);
+            color: var(--text-primary);
             border: none;
+            padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
             border-radius: 8px;
             cursor: pointer;
             transition: background 0.3s ease;
         }
 
-        .results-nav button:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .results-nav button.active {
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
+        .chart-nav button.active {
+            background: linear-gradient(45deg, var(--accent-secondary), var(--accent-primary));
         }
     </style>
 </head>
 <body>
     <div class="background-container">
+        <header>
+            <div class="logo">
+                <a href="../index.php">Poll Pioneer</a>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="../view/home.php">Home</a></li>
+                    <li><a href="../view/live_poll.php">Live Polls</a></li>
+                    <li><a href="../view/create_poll.php">Create Poll</a></li>
+                    <li><a href="../view/results.php">Results</a></li>
+                    <li><a href="../view/about.php">About</a></li>
+                    <li><a href="../view/contact.php">Contact</a></li>
+                </ul>
+            </nav>
+            <div class="user-menu">
+                <div class="user-icon-container">
+                    <i class='bx bx-user-circle user-icon' onclick="toggleUserDropdown(event)"></i>
+                    <div id="user-dropdown" class="user-dropdown">
+                        <?php if(isset($_SESSION['role'])): ?>
+                            <?php if($_SESSION['role'] == 1): ?>
+                                <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                            <?php else: ?>
+                                <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                            <?php endif; ?>
+                            
+                            <a href="../actions/logout.php">Logout</a>
+                        <?php else: ?>
+                            <a href="../view/login.php">Login</a>
+                            <a href="../view/sign-up.php">Sign Up</a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </header>
+        <?php 
+        // Display error messages if any
+        if(isset($_SESSION['error'])) {
+            echo '<div class="error-message" style="background: rgba(255,0,0,0.2); color: white; padding: 1rem; text-align: center;">' . 
+                 htmlspecialchars($_SESSION['error']) . 
+                 '</div>';
+            unset($_SESSION['error']);
+        }
+        ?>
+        <div class="container">
         <?php if ($action == 'list'): ?>
-            <div class="polls-container">
+            <div class="results-grid">
                 <?php foreach($polls as $poll): ?>
-                    <div class="poll-card">
-                        <div class="poll-card-header">
-                            <h2 class="poll-card-title"><?php echo htmlspecialchars($poll['PollTitle']); ?></h2>
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title"><?php echo htmlspecialchars($poll['PollTitle']); ?></h2>
                         </div>
-                        <p class="poll-card-description"><?php echo htmlspecialchars($poll['PollDescription']); ?></p>
-                        <div class="poll-card-footer">
-                            <span class="total-votes"><?php echo $poll['TotalVotes']; ?> Votes</span>
+                        <p><?php echo htmlspecialchars($poll['PollDescription']); ?></p>
+                        <div class="result-item-header">
+                            <span>Total Votes: <?php echo $poll['TotalVotes']; ?></span>
                             <?php if($poll['can_view_results']): ?>
                                 <a href="?action=details&id=<?php echo $poll['PollID']; ?>" class="view-results-btn">
                                     View Results
                                 </a>
                             <?php else: ?>
-                                <button class="view-results-btn" disabled>
-                                    View Results
-                                </button>
+                                <span class="text-muted">
+                                    <?php echo htmlspecialchars($poll['view_reason']); ?>
+                                </span>
                             <?php endif; ?>
                         </div>
-                        <?php if (!$poll['can_view_results']): ?>
-                            <div class="result-restriction-note">
-                                <?php echo htmlspecialchars($poll['view_reason']); ?>
-                            </div>
-                        <?php endif; ?>
                     </div>
                 <?php endforeach; ?>
             </div>
-        <?php elseif ($action == 'details'): ?>
+        <?php elseif ($action == 'details' && isset($_SESSION['user_id'])): ?>
             <?php if(isset($poll_results['error']) && $poll_results['error']): ?>
-                <div class="error-message">
-                    <?php echo htmlspecialchars($poll_results['message']); ?>
+                <div class="card">
+                    <p class="text-error"><?php echo htmlspecialchars($poll_results['message']); ?></p>
                 </div>
             <?php else: 
                 $poll = $poll_results['poll'];
                 $votes = $poll_results['votes'];
                 $total_votes = $poll_results['total_votes'];
             ?>
-                <div class="results-container">
-                    <h1><?php echo htmlspecialchars($poll['PollTitle']); ?></h1>
+                <div class="card">
+                    <div class="card-header">
+                        <h1 class="card-title"><?php echo htmlspecialchars($poll['PollTitle']); ?></h1>
+                    </div>
                     <p><?php echo htmlspecialchars($poll['PollDescription']); ?></p>
+                    <p>Total Votes: <?php echo $total_votes; ?></p>
+                </div>
 
-                    <div class="results-nav">
+                <div class="chart-nav">
                     <button onclick="showChart('pie')" class="active">Pie Chart</button>
                     <button onclick="showChart('bar')">Bar Chart</button>
-                    </div>
+                </div>
 
-                    <div class="chart-container">
-                        <div id="pieChartContainer">
-                            <h2>Pie Chart Results</h2>
-                            <canvas id="pieChart"></canvas>
-                        </div>
-                        <div id="barChartContainer" style="display:none;">
-                            <h2>Bar Chart Results</h2>
-                            <canvas id="barChart"></canvas>
-                        </div>
+                <div class="chart-container">
+                    <div class="chart-card" id="pieChartContainer">
+                        <h2>Pie Chart Results</h2>
+                        <canvas id="pieChart"></canvas>
                     </div>
+                    <div class="chart-card" id="barChartContainer" style="display:none;">
+                        <h2>Bar Chart Results</h2>
+                        <canvas id="barChart"></canvas>
+                    </div>
+                </div>
 
-                    <div class="results-table-container">
-                        <table class="results-table">
-                            <thead>
-                                <tr>
-                                    <th>Option</th>
-                                    <th>Votes</th>
-                                    <th>Percentage</th>
-                                    <th>Visualization</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach($votes as $vote): ?>
-                                    <tr>
-                                        <td>
-                                            <?php 
-                                            echo htmlspecialchars(
-                                                $poll['PollType'] == 'star-rating' || $poll['PollType'] == 'likert-scale' 
-                                                ? "Rating " . $vote['Rating'] 
-                                                : $vote['OptionText']
-                                            ); 
-                                            ?>
-                                        </td>
-                                        <td><?php echo $vote['VoteCount']; ?></td>
-                                        <td><?php echo $vote['VotePercentage'] . '%'; ?></td>
-                                        <td>
-                                            <div class="bar-fill" style="width: <?php echo $vote['VotePercentage']; ?>%"></div>
-                                        </td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Vote Breakdown</h2>
+                    </div>
+                    <div class="results-grid">
+                        <?php foreach($votes as $vote): ?>
+                            <div class="result-item">
+                                <div class="result-item-header">
+                                    <span class="result-item-title">
+                                        <?php 
+                                        echo htmlspecialchars(
+                                            $poll['PollType'] == 'star-rating' || $poll['PollType'] == 'likert-scale' 
+                                            ? "Rating " . $vote['Rating'] 
+                                            : $vote['OptionText']
+                                        ); 
+                                        ?>
+                                    </span>
+                                    <span class="result-percentage">
+                                        <?php echo $vote['VotePercentage'] . '%'; ?>
+                                    </span>
+                                </div>
+                                <div class="result-bar">
+                                    <div class="result-bar-fill" style="width: <?php echo $vote['VotePercentage']; ?>%"></div>
+                                </div>
+                                <span>Votes: <?php echo $vote['VoteCount']; ?></span>
+                            </div>
+                        <?php endforeach; ?>
                     </div>
                 </div>
             <?php endif; ?>
@@ -489,6 +633,25 @@ switch($action) {
     </div>
 
     <script>
+        function toggleUserDropdown(event) {
+            const dropdown = document.getElementById('user-dropdown');
+            dropdown.classList.toggle('show');
+            event.stopPropagation(); // Prevent the event from propagating to the window click listener
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(event) {
+            const dropdown = document.getElementById('user-dropdown');
+            const userIcon = document.querySelector('.user-icon');
+            
+            if (dropdown.classList.contains('show') && 
+                !dropdown.contains(event.target) && 
+                event.target !== userIcon) {
+                dropdown.classList.remove('show');
+            }
+        });
+
+        <?php if (isset($_SESSION['user_id'])): ?>
         // Chart.js setup
         const pieData = {
             labels: [<?php foreach($votes as $vote) { echo "'" . htmlspecialchars($vote['OptionText'] ?? "Rating " . $vote['Rating']) . "',"; } ?>],
@@ -551,6 +714,7 @@ switch($action) {
             navButtons.forEach(button => button.classList.remove('active'));
             document.querySelector(`.results-nav button[onclick="showChart('${type}')"]`).classList.add('active');
         }
+        <?php endif; ?>
     </script>
 </body>
 </html>

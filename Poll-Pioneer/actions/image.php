@@ -19,6 +19,6 @@ if (isset($_GET['id'])) {
 }
 
 // If no image found or error, serve a default placeholder
-header("Content-Type: image/png");
-readfile("../assets/images/poll-image.png");
+header("Content-Type: image/jpg");
+readfile("../assets/images/poll-image.jpg");
 ?>
