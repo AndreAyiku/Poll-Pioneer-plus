@@ -5,7 +5,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Login Page</title>
-    <link rel = "icon" type= "image/x-icon" href="../assests/images/ballot.ico">
+    <link rel = "icon" type= "image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
 
     <style>

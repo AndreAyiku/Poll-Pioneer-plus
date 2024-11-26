@@ -18,7 +18,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
     }
 
     // Check if the email exists in the database
-    $query = "SELECT  Username, PasswordHash, Role FROM PP_Users WHERE email = ?";
+    $query = "SELECT  UserID, Username, PasswordHash, Role FROM PP_Users WHERE email = ?";
     $stmt = $conn->prepare($query);
 
     if ($stmt) {
@@ -40,9 +40,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
 
                 // Redirect based on role
                 if ($user['Role'] === 1) {
-                    header("Location: ../view/admin/dashboard1.php");
-                } else {
-                    header("Location: ../view/admin/dashboard.php");
+                    header("Location: ../view/admin/admin_dashboard.php");
+                } elseif ($user['Role'] === 2) {
+                    header("Location: ../view/admin/User_dashboard.php");
                 }
                 exit();
             } else {

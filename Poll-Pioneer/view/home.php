@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Poll Pioneer - Sections</title>
+    <link rel = "icon" type= "image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <style>
         body, html {
@@ -274,8 +275,8 @@
                     <li><a href="../view/live_poll.php">Live Polls</a></li>
                     <li><a href="../view/create_poll.php">Create Poll</a></li>
                     <li><a href="../view/results.php">Results</a></li>
-                    <li><a href="#">About</a></li>
-                    <li><a href="#">Contact</a></li>
+                    <li><a href="../view/about.php">About</a></li>
+                    <li><a href="../view/contact.php">Contact</a></li>
                 </ul>
             </nav>
             <div class="auth-buttons">

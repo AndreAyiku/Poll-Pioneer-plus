@@ -15,7 +15,7 @@ $currentDateTime = date('Y-m-d H:i:s');
 // Updated query to include PollImage
 $sql = "SELECT PollID, PollTitle, PollDescription, PollType, PollImage 
         FROM PP_Polls 
-        WHERE PollEnd > '$currentDateTime' AND PollStart < '$currentDateTime'";
+        WHERE PollEnd > '$currentDateTime'";
 
 $result = $conn->query($sql);
 ?>

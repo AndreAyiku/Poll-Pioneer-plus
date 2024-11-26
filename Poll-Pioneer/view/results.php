@@ -1,12 +1,232 @@
+<?php
+// Include database configuration
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+include('../db/config.php');
+session_start();
+
+if (!$conn) {
+    die("Database connection failed. Please check your configuration.");
+}
+
+// Check if user is logged in
+if (!isset($_SESSION['user_id'])) {
+    $_SESSION['error'] = "Please log in to view poll results.";
+    header("Location: ../view/login.php");
+    exit();
+}
+
+// Function to check if a poll's results can be viewed
+function canViewPollResults($conn, $poll_id, $user_id) {
+    $query = "SELECT 
+        p.ResultDisplay, 
+        p.PollEnd,  /* Changed from EndDate */
+        p.CreatedBy,
+        (SELECT COUNT(*) FROM PP_Votes WHERE PollID = p.PollID) as TotalVotes,
+        (SELECT COUNT(*) FROM PP_Votes WHERE PollID = p.PollID AND VoterID = ?) as UserVotes
+      FROM PP_Polls p 
+      WHERE PollID = ?";
+
+
+    
+    $stmt = $conn->prepare($query);
+    $stmt->bind_param("ii", $user_id, $poll_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $poll = $result->fetch_assoc();
+
+    // If poll creator is viewing their own poll, always allow
+    if ($poll['CreatedBy'] == $user_id) {
+        return [
+            'can_view' => true, 
+            'reason' => 'Poll Creator'
+        ];
+    }
+
+    $current_time = time();
+$end_time = strtotime($poll['PollEnd']);  // Changed from EndDate
+
+    switch($poll['ResultDisplay']) {
+        case 'live':
+            return [
+                'can_view' => true, 
+                'reason' => 'Live results always visible'
+            ];
+        
+        case 'after-voting':
+            return [
+                'can_view' => $poll['UserVotes'] > 0, 
+                'reason' => 'Results visible after voting'
+            ];
+        
+        case 'after-end':
+            return [
+                'can_view' => $current_time > $end_time, 
+                'reason' => 'Results available after poll ends'
+            ];
+        
+        default:
+            return [
+                'can_view' => false, 
+                'reason' => 'Results not accessible'
+            ];
+    }
+}
+
+// Fetch all polls with their current status
+function fetchAllPolls($conn, $user_id) {
+    $query = "SELECT 
+            p.PollID, 
+            p.PollTitle, 
+            p.PollDescription, 
+            p.PollType, 
+            p.PollImage,  
+            p.ResultDisplay,
+            p.PollEnd,  
+            (SELECT COUNT(*) FROM PP_Votes WHERE PollID = p.PollID) as TotalVotes
+           FROM PP_Polls p
+           ORDER BY p.CreatedAt DESC";
+
+    $result = $conn->query($query);
+    $polls = [];
+
+    while ($poll = $result->fetch_assoc()) {
+        // Check result viewing permissions
+        $view_permissions = canViewPollResults($conn, $poll['PollID'], $user_id);
+        
+        $poll['can_view_results'] = $view_permissions['can_view'];
+        $poll['view_reason'] = $view_permissions['reason'];
+        
+        // Additional status checks
+        $current_time = time();
+        $end_time = strtotime($poll['PollEnd']);
+        $poll['is_expired'] = $current_time > $end_time;
+        
+        $polls[] = $poll;
+    }
+
+    return $polls;
+}
+
+// Fetch specific poll results
+function fetchPollResults($conn, $poll_id, $user_id) {
+    // Check if user can view results
+    $view_permissions = canViewPollResults($conn, $poll_id, $user_id);
+    
+    if (!$view_permissions['can_view']) {
+        return [
+            'error' => true,
+            'message' => $view_permissions['reason']
+        ];
+    }
+
+    // Fetch poll details
+    $poll_query = "SELECT * FROM PP_Polls WHERE PollID = ?";
+    $stmt = $conn->prepare($poll_query);
+    $stmt->bind_param("i", $poll_id);
+    $stmt->execute();
+    $poll_result = $stmt->get_result();
+    $poll = $poll_result->fetch_assoc();
+
+    // Fetch poll options and vote counts
+    $vote_query = "";
+    switch($poll['PollType']) {
+        case 'multiple-choice':
+        case 'checkboxes':
+            $vote_query = "
+                SELECT 
+                    po.OptionID, 
+                    po.OptionText, 
+                    COUNT(pv.VoteID) as VoteCount,
+                    ROUND(COUNT(pv.VoteID) * 100.0 / (SELECT COUNT(*) FROM PP_Votes WHERE PollID = ?), 2) as VotePercentage
+                FROM 
+                    PP_PollOptions po
+                LEFT JOIN 
+                    PP_Votes pv ON po.OptionID = pv.OptionSelected
+                WHERE 
+                    po.PollID = ?
+                GROUP BY 
+                    po.OptionID, po.OptionText
+                ORDER BY 
+                    VoteCount DESC
+            ";
+            break;
+        
+        case 'star-rating':
+        case 'likert-scale':
+            $vote_query = "
+                SELECT 
+                    OptionSelected as Rating, 
+                    COUNT(*) as VoteCount,
+                    ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM PP_Votes WHERE PollID = ?), 2) as VotePercentage
+                FROM 
+                    PP_Votes
+                WHERE 
+                    PollID = ?
+                GROUP BY 
+                    Rating
+                ORDER BY 
+                    Rating
+            ";
+            break;
+    }
+
+    $stmt = $conn->prepare($vote_query);
+    $stmt->bind_param("ii", $poll_id, $poll_id);
+    $stmt->execute();
+    $vote_result = $stmt->get_result();
+    $votes = $vote_result->fetch_all(MYSQLI_ASSOC);
+
+    // Total votes
+    $total_votes_query = "SELECT COUNT(*) as TotalVotes FROM PP_Votes WHERE PollID = ?";
+    $stmt = $conn->prepare($total_votes_query);
+    $stmt->bind_param("i", $poll_id);
+    $stmt->execute();
+    $total_votes_result = $stmt->get_result();
+    $total_votes = $total_votes_result->fetch_assoc()['TotalVotes'];
+
+    return [
+        'error' => false,
+        'poll' => $poll,
+        'votes' => $votes,
+        'total_votes' => $total_votes
+    ];
+}
+
+// Handle different request types
+$action = isset($_GET['action']) ? $_GET['action'] : 'list';
+
+switch($action) {
+    case 'list':
+        // Fetch and display all polls
+        $polls = fetchAllPolls($conn, $_SESSION['user_id']);
+        break;
+
+    case 'details':
+        // Fetch specific poll results
+        $poll_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+        $poll_results = fetchPollResults($conn, $poll_id, $_SESSION['user_id']);
+        break;
+
+    default:
+        $_SESSION['error'] = "Invalid request.";
+        header("Location: ../view/dashboard.php");
+        exit();
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Poll Pioneer - Results</title>
+    <title>Poll Results</title>
+    <link rel="icon" type="image/x-icon" href="../assests/images/voting-box.ico">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
-        /* CSS from home.html */
+        /* Reuse styles from previous results page with some modifications */
         body, html {
             margin: 0;
             padding: 0;
@@ -22,6 +242,7 @@
             min-height: 100vh;
             display: flex;
             flex-direction: column;
+            padding: 2rem;
         }
 
         @keyframes gradient {
@@ -30,606 +251,306 @@
             100% {background-position: 0% 50%;}
         }
 
-        header {
-            background-color: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 1rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-
-        .logo a {
-            color: #fff;
-            text-decoration: none;
-            font-size: 2rem;
-            font-weight: bold;
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 30px rgba(79, 172, 254, 0.5);
-        }
-
-        nav ul {
-            list-style-type: none;
-            display: flex;
-            gap: 2rem;
-            padding: 0;
-        }
-
-        nav ul li a {
-            color: #fff;
-            text-decoration: none;
-            font-size: 1.1rem;
-            transition: all 0.3s ease;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-        }
-
-        nav ul li a:hover {
-            background: rgba(255, 255, 255, 0.1);
-            transform: translateY(-2px);
-        }
-
-        .auth-buttons a {
-            color: #1a1a2e;
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            padding: 0.7rem 1.5rem;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-left: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-
-        .auth-buttons a:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
-        }
-
-        .content-container {
-            padding: 2rem;
-            overflow-y: auto;
-        }
-
-        .featured-poll {
-            background: rgba(0, 0, 0, 0.2);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 2rem;
-        }
-
-        .poll-badge {
-            background: #FFD700;
-            color: #000;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            display: inline-block;
-            font-weight: bold;
-            margin-bottom: 1rem;
-        }
-
-        .poll-title {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .poll-description {
-            font-size: 1rem;
-            color: rgba(255, 255, 255, 0.6);
-            margin-bottom: 1rem;
-        }
-
-        .poll-meta, .poll-stats {
-            display: flex;
-            gap: 2rem;
-            color: rgba(79, 172, 254, 0.8);
-            font-weight: 500;
-        }
-
-        .result-bars {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-
-        .result-item {
-            width: 100%;
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-
-        .result-bar-bg {
-            background: rgba(255, 255, 255, 0.1);
-            height: 24px;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .result-bar-fill {
-            height: 100%;
-            transition: width 1s ease-in-out;
-        }
-
-        .results-grid {
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 15px;
-            padding: 2rem;
-        }
-
-        .result-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: transform 0.3s ease;
-            margin-bottom: 1.5rem;
-        }
-
-        .result-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
-        }
-
-        .result-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 1.5rem;
-        }
-
-        .details-button {
-            padding: 0.5rem 1rem;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            transition: all 0.3s ease;
-        }
-
-        .details-button:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        .search-container {
-            padding: 2rem 2rem 0 2rem;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .search-wrapper {
-            position: relative;
-            width: 100%;
-            max-width: 600px;
-        }
-        
-        .search-input {
-            width: 100%;
-            padding: 1.2rem 1.2rem 1.2rem 3.5rem;
-            font-size: 1.1rem;
-            border: none;
-            border-radius: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            color: #fff;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .search-input:focus {
-            outline: none;
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(79, 172, 254, 0.5);
-            box-shadow: 0 0 20px rgba(79, 172, 254, 0.2);
-        }
-        
-        .search-input::placeholder {
-            color: #666;
-        }
-        
-        .search-icon {
-            position: absolute;
-            left: 1rem;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-            font-size: 1.2rem;
-        }
-        .filter-container {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 2rem;
-            justify-content: center;
-        }
-        .filter-button {
-            background-color: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            padding: 0.5rem 1rem;
-            border: 2px solid transparent;
-            border-radius: 5px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        .filter-button:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-        }
-        .filter-button.active {
-        background-color: #4CAF50;
-         border: 2px solid #4CAF50;
-        }
-        .result-bars {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-
-        .result-item {
-            width: 100%;
-        }
-
-        .result-header {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 0.5rem;
-        }
-
-        .result-bar-bg {
-            background: rgba(255, 255, 255, 0.1);
-            height: 24px;
-            border-radius: 12px;
-            overflow: hidden;
-        }
-
-        .result-bar-fill {
-            height: 100%;
-            transition: width 1s ease-in-out;
-        }
-
-        .results-grid {
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 15px;
-            padding: 2rem;
-        }
-
-        .grid-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-        }
-
-        .view-options {
-            display: flex;
-            gap: 0.5rem;
-        }
-
-        .view-button {
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            padding: 0.5rem;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .view-button.active {
-            background: white;
-            color: black;
-        }
-
-        .results-wrapper {
+        .polls-container {
+            max-width: 1200px;
+            margin: 0 auto;
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 2rem;
         }
 
-        .result-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
+        .poll-card {
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             padding: 1.5rem;
             transition: transform 0.3s ease;
-        }
-
-        .result-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .result-card-header {
             display: flex;
-            justify-content: space-between;
-            margin-bottom: 1rem;
+            flex-direction: column;
         }
 
-        .category {
-            color: #FFD700;
-            font-size: 0.9rem;
+        .poll-card:hover {
+            transform: scale(1.05);
         }
 
-        .status {
-            padding: 0.3rem 0.8rem;
-            border-radius: 15px;
-            font-size: 0.8rem;
-        }
-
-        .status.completed {
-            background: rgba(76, 175, 80, 0.2);
-            color: #4CAF50;
-        }
-
-        .status.live {
-            background: rgba(33, 150, 243, 0.2);
-            color: #2196F3;
-        }
-
-        .result-chart {
-            margin: 1.5rem 0;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 8px;
-        }
-
-        .winner-section {
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-
-        .winner-badge {
-            background: #FFD700;
-            color: black;
-            display: inline-block;
-            padding: 0.3rem 0.8rem;
-            border-radius: 12px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            margin-bottom: 0.5rem;
-        }
-
-        .winner-name {
-            font-size: 1.2rem;
-            font-weight: bold;
-            margin-bottom: 0.3rem;
-        }
-
-        .winner-votes {
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 0.9rem;
-        }
-
-        .runners-up {
-            margin-top: 1rem;
-        }
-
-        .runner-up {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.8rem;
-        }
-
-        .vote-bar {
-            flex: 1;
-            height: 8px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .vote-fill {
-            height: 100%;
-            background: #2196F3;
-            border-radius: 4px;
-        }
-
-        .result-footer {
+        .poll-card-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-top: 1.5rem;
+            margin-bottom: 1rem;
         }
 
-        .stats {
-            display: flex;
-            gap: 1rem;
+        .poll-card-title {
+            font-size: 1.5rem;
+            background: linear-gradient(45deg, #fff, #e0e0e0);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .poll-card-description {
             color: rgba(255, 255, 255, 0.7);
-            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            flex-grow: 1;
         }
 
-        .details-button, .vote-button {
-            padding: 0.5rem 1rem;
+        .poll-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .total-votes {
+            color: rgba(79, 172, 254, 0.8);
+        }
+
+        .view-results-btn {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            color: white;
             border: none;
-            border-radius: 5px;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
             cursor: pointer;
-            font-weight: bold;
             transition: all 0.3s ease;
         }
 
-        .details-button {
+        .view-results-btn:disabled {
+            background: rgba(255, 255, 255, 0.2);
+            cursor: not-allowed;
+        }
+
+        .result-restriction-note {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.7);
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal-content {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            width: 80%;
+            max-width: 1000px;
+            padding: 2rem;
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+        }
+
+        .chart-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        .results-nav {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 1rem;
+        }
+
+        .results-nav button {
+            margin: 0 0.5rem;
+            padding: 0.5rem 1rem;
             background: rgba(255, 255, 255, 0.1);
             color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
         }
 
-        .vote-button {
-            background: #4CAF50;
-            color: white;
-        }
-
-        .details-button:hover {
+        .results-nav button:hover {
             background: rgba(255, 255, 255, 0.2);
         }
 
-        .vote-button:hover {
-            background: #45a049;
+        .results-nav button.active {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
         }
     </style>
 </head>
 <body>
     <div class="background-container">
-        <header>
-            <div class="logo"><a href="index.html">Poll Pioneer</a></div>
-            <nav>
-                <ul>
-                    <li><a href="home.html">Home</a></li>
-                    <li><a href="live_polls.html">Live Polls</a></li>
-                    <li><a href="Create_poll.html">Create Poll</a></li>
-                    <li><a href="results.html">Results</a></li>
-                    <li><a href="#">About</a></li>
-                    <li><a href="#">Contact</a></li>
-                </ul>
-            </nav>
-            <div class="auth-buttons">
-                <a href="../view/login.php">Login</a>
-                <a href="../view/sign-up.php">Sign Up</a>
+        <?php if ($action == 'list'): ?>
+            <div class="polls-container">
+                <?php foreach($polls as $poll): ?>
+                    <div class="poll-card">
+                        <div class="poll-card-header">
+                            <h2 class="poll-card-title"><?php echo htmlspecialchars($poll['PollTitle']); ?></h2>
+                        </div>
+                        <p class="poll-card-description"><?php echo htmlspecialchars($poll['PollDescription']); ?></p>
+                        <div class="poll-card-footer">
+                            <span class="total-votes"><?php echo $poll['TotalVotes']; ?> Votes</span>
+                            <?php if($poll['can_view_results']): ?>
+                                <a href="?action=details&id=<?php echo $poll['PollID']; ?>" class="view-results-btn">
+                                    View Results
+                                </a>
+                            <?php else: ?>
+                                <button class="view-results-btn" disabled>
+                                    View Results
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!$poll['can_view_results']): ?>
+                            <div class="result-restriction-note">
+                                <?php echo htmlspecialchars($poll['view_reason']); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endforeach; ?>
             </div>
-        </header>
-
-        <div class="search-container">
-            <div class="search-wrapper">
-                <i class='bx bx-search search-icon'></i>
-                <input type="text" class="search-input" placeholder="Search polls by title, category, or description...">
-            </div>
-        </div>
-
-        <div class="filter-container">
-            <button class="filter-button active">All Results</button>
-            <button class="filter-button">Politics</button>
-            <button class="filter-button">Entertainment</button>
-            <button class="filter-button">Technology</button>
-            <button class="filter-button">Sports</button>
-        </div>
-
-        <div class="content-container">
-            <div class="featured-poll">
-                <div class="poll-badge">Featured Poll</div>
-                <h2 class="poll-title">2024 Presidential Election Forecast</h2>
-                <p class="poll-description">Latest polling data and predictions</p>
-                <div class="poll-meta">
-                    <span><i class='bx bx-poll'></i> 1.5M votes</span>
-                    <span><i class='bx bx-time'></i> Updated 2h ago</span>
-                    <span><i class='bx bx-bar-chart'></i> 75% confidence</span>
+        <?php elseif ($action == 'details'): ?>
+            <?php if(isset($poll_results['error']) && $poll_results['error']): ?>
+                <div class="error-message">
+                    <?php echo htmlspecialchars($poll_results['message']); ?>
                 </div>
-                <div class="result-bars">
-                    <div class="result-item">
-                        <div class="result-header">
-                            <span class="candidate">Gilbert Tetteh</span>
-                            <span class="percentage">88%</span>
-                        </div>
-                        <div class="result-bar-bg">
-                            <div class="result-bar-fill" style="width: 88%; background-color: #4CAF50;"></div>
-                        </div>
-                    </div>
-                    <div class="result-item">
-                        <div class="result-header">
-                            <span class="candidate">Andre Ayiku</span>
-                            <span class="percentage">10%</span>
-                        </div>
-                        <div class="result-bar-bg">
-                            <div class="result-bar-fill" style="width: 10%; background-color: #2196F3;"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <?php else: 
+                $poll = $poll_results['poll'];
+                $votes = $poll_results['votes'];
+                $total_votes = $poll_results['total_votes'];
+            ?>
+                <div class="results-container">
+                    <h1><?php echo htmlspecialchars($poll['PollTitle']); ?></h1>
+                    <p><?php echo htmlspecialchars($poll['PollDescription']); ?></p>
 
-            <!-- Recent Results Grid -->
-            <div class="results-grid">
-                <div class="grid-header">
-                    <h2>Recent Results</h2>
-                    <div class="view-options">
-                        <button class="view-button active"><i class='bx bx-grid-alt'></i></button>
-                        <button class="view-button"><i class='bx bx-list-ul'></i></button>
+                    <div class="results-nav">
+                    <button onclick="showChart('pie')" class="active">Pie Chart</button>
+                    <button onclick="showChart('bar')">Bar Chart</button>
                     </div>
-                </div>
-                
-                <div class="results-wrapper">
-                    <div class="result-card">
-                        <div class="result-card-header">
-                            <span class="category">Technology</span>
-                            <span class="status completed">Completed</span>
+
+                    <div class="chart-container">
+                        <div id="pieChartContainer">
+                            <h2>Pie Chart Results</h2>
+                            <canvas id="pieChart"></canvas>
                         </div>
-                        <h3>Best Smartphone 2024</h3>
-                        <div class="result-chart">
-                            <div class="winner-section">
-                                <div class="winner-badge">Winner</div>
-                                <div class="winner-name">iPhone 15 Pro</div>
-                                <div class="winner-votes">42% (380K votes)</div>
-                            </div>
-                            <div class="runners-up">
-                                <div class="runner-up">
-                                    <span class="name">Samsung S24 Ultra</span>
-                                    <div class="vote-bar">
-                                        <div class="vote-fill" style="width: 35%"></div>
-                                    </div>
-                                    <span class="percentage">35%</span>
-                                </div>
-                                <div class="runner-up">
-                                    <span class="name">Google Pixel 8</span>
-                                    <div class="vote-bar">
-                                        <div class="vote-fill" style="width: 23%"></div>
-                                    </div>
-                                    <span class="percentage">23%</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="result-footer">
-                            <div class="stats">
-                                <span><i class='bx bx-user'></i> 850K participants</span>
-                                <span><i class='bx bx-calendar'></i> Ended Oct 15</span>
-                            </div>
-                            <button class="details-button">Full Results</button>
+                        <div id="barChartContainer" style="display:none;">
+                            <h2>Bar Chart Results</h2>
+                            <canvas id="barChart"></canvas>
                         </div>
                     </div>
 
-                    <div class="result-card">
-                        <div class="result-card-header">
-                            <span class="category">Entertainment</span>
-                            <span class="status live">Live</span>
-                        </div>
-                        <h3>Oscar Predictions 2024</h3>
-                        <div class="result-chart">
-                            <div class="category-results">
-                                <h4>Best Picture Leader</h4>
-                                <div class="leader-bar">
-                                    <div class="leader-fill" style="width: 45%"></div>
-                                    <span class="leader-name">Oppenheimer</span>
-                                    <span class="leader-percentage">45%</span>
-                                </div>
-                            </div>
-                            <div class="vote-progress">
-                                <div class="progress-text">
-                                    <span>320K votes</span>
-                                    <span>5 days left</span>
-                                </div>
-                                <div class="progress-bar">
-                                    <div class="progress-fill" style="width: 65%"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="result-footer">
-                            <button class="vote-button">Vote Now</button>
-                            <button class="details-button">View Details</button>
-                        </div>
+                    <div class="results-table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Option</th>
+                                    <th>Votes</th>
+                                    <th>Percentage</th>
+                                    <th>Visualization</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach($votes as $vote): ?>
+                                    <tr>
+                                        <td>
+                                            <?php 
+                                            echo htmlspecialchars(
+                                                $poll['PollType'] == 'star-rating' || $poll['PollType'] == 'likert-scale' 
+                                                ? "Rating " . $vote['Rating'] 
+                                                : $vote['OptionText']
+                                            ); 
+                                            ?>
+                                        </td>
+                                        <td><?php echo $vote['VoteCount']; ?></td>
+                                        <td><?php echo $vote['VotePercentage'] . '%'; ?></td>
+                                        <td>
+                                            <div class="bar-fill" style="width: <?php echo $vote['VotePercentage']; ?>%"></div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-        </div>
+            <?php endif; ?>
+        <?php endif; ?>
     </div>
+
+    <script>
+        // Chart.js setup
+        const pieData = {
+            labels: [<?php foreach($votes as $vote) { echo "'" . htmlspecialchars($vote['OptionText'] ?? "Rating " . $vote['Rating']) . "',"; } ?>],
+            datasets: [{
+                data: [<?php foreach($votes as $vote) { echo $vote['VoteCount'] . ","; } ?>],
+                backgroundColor: [
+                    '#ff6384',
+                    '#36a2eb',
+                    '#ffcd56',
+                    '#4bc0c0',
+                    '#9966ff',
+                    '#ff9f40'
+                ]
+            }]
+        };
+
+        const barData = {
+            labels: pieData.labels,
+            datasets: [{
+                label: 'Votes',
+                data: pieData.datasets[0].data,
+                backgroundColor: pieData.datasets[0].backgroundColor,
+            }]
+        };
+
+        const pieConfig = {
+            type: 'pie',
+            data: pieData,
+        };
+
+        const barConfig = {
+            type: 'bar',
+            data: barData,
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        };
+
+        const pieChart = new Chart(document.getElementById('pieChart'), pieConfig);
+        const barChart = new Chart(document.getElementById('barChart'), barConfig);
+
+        function showChart(type) {
+            const pieContainer = document.getElementById('pieChartContainer');
+            const barContainer = document.getElementById('barChartContainer');
+            const navButtons = document.querySelectorAll('.results-nav button');
+
+            if (type === 'pie') {
+                pieContainer.style.display = 'block';
+                barContainer.style.display = 'none';
+            } else if (type === 'bar') {
+                pieContainer.style.display = 'none';
+                barContainer.style.display = 'block';
+            }
+
+            navButtons.forEach(button => button.classList.remove('active'));
+            document.querySelector(`.results-nav button[onclick="showChart('${type}')"]`).classList.add('active');
+        }
+    </script>
 </body>
 </html>

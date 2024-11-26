@@ -1,3 +1,137 @@
+<?php
+// Enable error reporting for debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+// Include the database connection
+include('../db/config.php');
+
+// Start session to handle user authentication and messages
+session_start();
+
+// Check if the user is logged in - redirect if not
+if (!isset($_SESSION['user_id'])) {
+    $_SESSION['error'] = "Please log in to create a poll.";
+    header("Location: ../view/login.php");
+    exit();
+}
+
+// Backend: Process form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    // Basic form validation
+    if (empty($_POST['poll_title']) || empty($_POST['poll_description']) || 
+        empty($_POST['poll_start']) || empty($_POST['poll_end']) || 
+        !isset($_POST['poll_options']) || count($_POST['poll_options']) < 2) {
+        $_SESSION['error'] = "Please fill in all required fields and provide at least two options.";
+        header("Location: create_poll.php");
+        exit();
+    }
+
+    // Sanitize and prepare data
+    $poll_title = trim($_POST['poll_title']);
+    $poll_description = trim($_POST['poll_description']);
+    $poll_type = $_POST['poll_type'] ?? 'multiple-choice';
+    $poll_start = $_POST['poll_start'];
+    $poll_end = $_POST['poll_end'];
+    $privacy = $_POST['privacy'] ?? 'public';
+    $allow_multiple_responses = isset($_POST['allow_multiple_responses']) ? 1 : 0;
+    $anonymous_voting = isset($_POST['anonymous_voting']) ? 1 : 0;
+    $result_display = $_POST['result_display'] ?? 'live';
+    $randomize_order = isset($_POST['randomize_order']) ? 1 : 0;
+    $poll_options = array_map('trim', $_POST['poll_options']);
+
+    // Validate dates
+    if (strtotime($poll_start) >= strtotime($poll_end)) {
+        $_SESSION['error'] = "Poll end date must be later than the start date.";
+        header("Location: create_poll.php");
+        exit();
+    }
+
+    try {
+        $conn->begin_transaction();
+
+        // First, insert the basic poll information
+        $query = "INSERT INTO PP_Polls (
+            PollTitle, PollDescription, PollType, PollStart, PollEnd, 
+            Privacy, AllowMultipleResponses, AnonymousVoting, 
+            ResultDisplay, RandomizeOrder, CreatedBy
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+        $stmt = $conn->prepare($query);
+        if (!$stmt) {
+            throw new Exception("Failed to prepare poll insertion: " . $conn->error);
+        }
+
+        $stmt->bind_param(
+            "ssssssiisis",
+            $poll_title, $poll_description, $poll_type, $poll_start, $poll_end,
+            $privacy, $allow_multiple_responses, $anonymous_voting,
+            $result_display, $randomize_order, $_SESSION['user_id']
+        );
+
+        if (!$stmt->execute()) {
+            throw new Exception("Failed to create poll: " . $stmt->error);
+        }
+
+        $poll_id = $stmt->insert_id;
+
+        // Handle image upload if present
+        if (isset($_FILES['poll_image']) && $_FILES['poll_image']['error'] === UPLOAD_ERR_OK) {
+            $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
+            $file_type = $_FILES['poll_image']['type'];
+            
+            if (!in_array($file_type, $allowed_types)) {
+                throw new Exception("Invalid image type. Only JPG, PNG, and GIF are allowed.");
+            }
+
+            $image_data = file_get_contents($_FILES['poll_image']['tmp_name']);
+            
+            $update_image = "UPDATE PP_Polls SET PollImage = ? WHERE PollID = ?";
+            $stmt_image = $conn->prepare($update_image);
+            if (!$stmt_image) {
+                throw new Exception("Failed to prepare image update: " . $conn->error);
+            }
+
+            $null = NULL;
+            $stmt_image->bind_param("bi", $null, $poll_id);
+            $stmt_image->send_long_data(0, $image_data);
+            
+            if (!$stmt_image->execute()) {
+                throw new Exception("Failed to upload image: " . $stmt_image->error);
+            }
+        }
+
+        // Insert poll options
+        $option_query = "INSERT INTO PP_PollOptions (PollID, OptionText) VALUES (?, ?)";
+        $stmt_options = $conn->prepare($option_query);
+        if (!$stmt_options) {
+            throw new Exception("Failed to prepare options insertion: " . $conn->error);
+        }
+
+        foreach ($poll_options as $option) {
+            if (trim($option) !== '') {
+                $stmt_options->bind_param("is", $poll_id, $option);
+                if (!$stmt_options->execute()) {
+                    throw new Exception("Failed to insert option: " . $stmt_options->error);
+                }
+            }
+        }
+
+        $conn->commit();
+        $_SESSION['success'] = "Poll created successfully!";
+        header("Location: ../view/live_poll.php?id=" . $poll_id);
+        exit();
+
+    } catch (Exception $e) {
+        $conn->rollback();
+        $_SESSION['error'] = "Error creating poll: " . $e->getMessage();
+        header("Location: create_poll.php");
+        exit();
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -59,6 +193,7 @@
             display: flex;
             gap: 2rem;
             padding: 0;
+            margin: 0;
         }
 
         nav ul li a {
@@ -73,21 +208,6 @@
         nav ul li a:hover {
             background: rgba(255, 255, 255, 0.1);
             transform: translateY(-2px);
-        }
-        .auth-buttons a {
-            color: #1a1a2e;
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            padding: 0.7rem 1.5rem;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-left: 1rem;
-            font-weight: 600;
-            transition: all 0.3s ease;
-        }
-        
-        .auth-buttons a:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
         }
 
         .content-container {
@@ -113,11 +233,11 @@
         .form-section h1 {
             font-size: 2.5rem;
             text-align: center;
+            margin-bottom: 2rem;
             background: linear-gradient(45deg, #00f2fe, #4facfe);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
-            margin-bottom: 2rem;
         }
 
         .form-group {
@@ -126,14 +246,14 @@
 
         .form-group label {
             display: block;
+            margin-bottom: 0.5rem;
             font-weight: 500;
             color: #fff;
-            margin-bottom: 0.5rem;
-            font-size: 1.1rem;
         }
 
-        .form-group input, 
-        .form-group select, 
+        .form-group input[type="text"],
+        .form-group input[type="datetime-local"],
+        .form-group select,
         .form-group textarea {
             width: 100%;
             padding: 0.8rem;
@@ -145,78 +265,92 @@
             transition: all 0.3s ease;
         }
 
-        .form-group input:focus, 
-        .form-group select:focus, 
+        .form-group input[type="file"] {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
         .form-group textarea:focus {
             outline: none;
             border-color: #4facfe;
             box-shadow: 0 0 0 2px rgba(79, 172, 254, 0.2);
         }
 
-        .option {
+        .checkbox-group {
             display: flex;
             align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #4facfe;
+        }
+
+        .options-container {
+            display: flex;
+            flex-direction: column;
             gap: 1rem;
             margin-bottom: 1rem;
         }
 
-        .option input {
+        .option-input {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .option-input input {
             flex: 1;
-            padding: 0.8rem;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(0, 0, 0, 0.2);
-            color: #fff;
-            transition: all 0.3s ease;
-        }
-
-        .add-option, 
-        .remove-option, 
-        .create-poll, 
-        .publish-poll {
-            padding: 0.8rem 1.5rem;
-            border: none;
-            border-radius: 10px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .add-option {
-            background: linear-gradient(45deg, #00f2fe, #4facfe);
-            color: #fff;
-            width: 100%;
-            margin-top: 1rem;
         }
 
         .remove-option {
             background: linear-gradient(45deg, #ff416c, #ff4b2b);
             color: #fff;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
         }
 
-        .create-poll, 
-        .publish-poll {
+        .add-option {
+            background: linear-gradient(45deg, #00f2fe, #4facfe);
+            color: #fff;
+            border: none;
+            padding: 0.8rem 1.5rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
             width: 100%;
-            margin-top: 1.5rem;
-            font-size: 1.1rem;
-            display: block;
+            margin-top: 1rem;
+            transition: all 0.3s ease;
         }
 
         .create-poll {
             background: linear-gradient(45deg, #00f2fe, #4facfe);
             color: #fff;
-        }
-
-        .publish-poll {
-            background: linear-gradient(45deg, #4facfe, #00f2fe);
-            color: #fff;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            font-size: 1.1rem;
+            margin-top: 2rem;
+            transition: all 0.3s ease;
         }
 
         .add-option:hover,
-        .create-poll:hover,
-        .publish-poll:hover {
+        .create-poll:hover {
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(79, 172, 254, 0.4);
         }
@@ -226,264 +360,278 @@
             box-shadow: 0 5px 15px rgba(255, 75, 43, 0.4);
         }
 
-        .poll-link {
-            margin-top: 1rem;
-            padding: 1rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            font-size: 0.9rem;
+        .error-message {
+            background: rgba(255, 99, 71, 0.2);
+            border: 1px solid #ff6347;
             color: #fff;
-        }
-
-        input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 10px;
-            accent-color: #4facfe;
-        }
-
-        input[type="datetime-local"] {
+            padding: 1rem;
+            border-radius: 10px;
             margin-bottom: 1rem;
         }
 
-        select {
-            appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 1rem center;
-            background-size: 1em;
+        .success-message {
+            background: rgba(50, 205, 50, 0.2);
+            border: 1px solid #32cd32;
+            color: #fff;
+            padding: 1rem;
+            border-radius: 10px;
+            margin-bottom: 1rem;
         }
+        .user-menu {
+        position: relative;
+    }
+
+    .user-icon-container {
+        position: relative;
+    }
+
+    .user-icon {
+        font-size: 2rem;
+        color: #fff;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .user-icon:hover {
+        transform: scale(1.1);
+        color: #4facfe;
+    }
+
+    .user-dropdown {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: rgba(0, 0, 0, 0.8);
+        backdrop-filter: blur(10px);
+        border-radius: 10px;
+        min-width: 200px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+        padding: 0.5rem 0;
+        margin-top: 0.5rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .user-dropdown a {
+        display: block;
+        color: #fff;
+        text-decoration: none;
+        padding: 0.7rem 1.2rem;
+        transition: all 0.3s ease;
+    }
+
+    .user-dropdown a:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #4facfe;
+    }
+
+    .user-dropdown.show {
+        display: block;
+    }
     </style>
 </head>
 <body>
     <div class="background-container">
-        <header>
-            <div class="logo">
-                <a href="index.html">Poll Pioneer</a>
+    <header>
+    <div class="logo">
+        <a href="../index.php">Poll Pioneer</a>
+    </div>
+    <nav>
+        <ul>
+            <li><a href="../view/home.php">Home</a></li>
+            <li><a href="../view/live_polls.php">Live Polls</a></li>
+            <li><a href="../view/create_poll.php">Create Poll</a></li>
+            <li><a href="../view/results.php">Results</a></li>
+            <li><a href="../view/about.php">About</a></li>
+            <li><a href="../view/contact.php">Contact</a></li>
+        </ul>
+    </nav>
+    <div class="user-menu">
+        <div class="user-icon-container">
+            <i class='bx bx-user-circle user-icon' onclick="toggleUserDropdown()"></i>
+            <div id="user-dropdown" class="user-dropdown">
+                <?php if(isset($_SESSION['role'])): ?>
+                    <?php if($_SESSION['role'] == 1): ?>
+                        <a href="../view/admin/admin_dashboard.php">Admin Dashboard</a>
+                    <?php else: ?>
+                        <a href="../view/admin/User_dashboard.php">User Dashboard</a>
+                    <?php endif; ?>
+                    <a href="../view/profile.php">Profile</a>
+                    <a href="../actions/logout.php">Logout</a>
+                <?php else: ?>
+                    <a href="../view/login.php">Login</a>
+                    <a href="../view/sign-up.php">Sign Up</a>
+                <?php endif; ?>
             </div>
-            <nav>
-                <ul>
-                    <li><a href="../view/home.php">Home</a></li>
-                    <li><a href="../view/">Live Polls</a></li>
-                    <li><a href="../view/create_poll.php">Create Poll</a></li>
-                    <li><a href="results.html">Results</a></li>
-                    <li><a href="#">About</a></li>
-                    <li><a href="#">Contact</a></li>
-                </ul>
-            </nav>
-            <div class="auth-buttons">
-                <a href="../view/login.php">Login</a>
-                <a href="../view/sign-up.php">Sign Up</a>
-            </div>
-        </header>
+        </div>
+    </div>
+</header>
+
 
         <div class="content-container">
             <section class="form-section">
-                <h1>Create Poll</h1>
-
-                <!-- Basic poll setup -->
-                <div class="form-group">
-                    <label for="pollTitle">Poll Title:</label>
-                    <input type="text" id="pollTitle" placeholder="Enter poll title">
-                </div>
-                <div class="form-group">
-                    <label for="pollDescription">Poll Description:</label>
-                    <textarea id="pollDescription" rows="3" placeholder="Enter poll description"></textarea>
-                </div>
-                <div class="form-group">
-                    <label for="pollType">Poll Type:</label>
-                    <select id="pollType">
-                        <option value="multiple-choice">Multiple Choice</option>
-                        <option value="checkboxes">Checkboxes</option>
-                        <option value="star-rating">Star Rating</option>
-                        <option value="likert-scale">Likert Scale</option>
-                    </select>
-                </div>
+                <h1>Create New Poll</h1>
                 
-                <!-- Poll duration setup -->
-                <div class="form-group">
-                    <label for="pollDuration">Poll Duration:</label>
-                    <input type="datetime-local" id="pollStart" placeholder="Start date">
-                    <input type="datetime-local" id="pollEnd" placeholder="End date">
-                </div>
-
-                <!-- Privacy options -->
-                <div class="form-group">
-                    <label for="pollPrivacy">Privacy:</label>
-                    <select id="pollPrivacy" onchange="togglePrivacyOptions()">
-                        <option value="public">Public</option>
-                        <option value="private">Private</option>
-                    </select>
-                </div>
-                <div class="poll-link" id="pollLink" style="display: none;">
-                    Shareable link for private poll: <span id="generatedLink">N/A</span>
-                </div>
-
-                <!-- Voting restrictions -->
-                <div class="form-group">
-                    <label>Voting Restrictions:</label>
-                    <select id="votingRestrictions">
-                        <option value="none">None</option>
-                        <option value="one-vote-per-user">One vote per user</option>
-                        <option value="one-vote-per-ip">One vote per IP</option>
-                        <option value="login-required">Login required</option>
-                    </select>
-                </div>
-
-                <!-- Allow multiple responses -->
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="allowMultipleResponses">
-                        Allow Multiple Responses
-                    </label>
-                </div>
-
-                <!-- Anonymous voting -->
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="anonymousVoting">
-                        Anonymous Voting
-                    </label>
-                </div>
-
-                <!-- Result display options -->
-                <div class="form-group">
-                    <label>Result Display:</label>
-                    <select id="resultDisplay">
-                        <option value="live">Show live results</option>
-                        <option value="after-voting">Show results after voting</option>
-                        <option value="at-end">Show results at poll end</option>
-                    </select>
-                </div>
-
-                <!-- Randomize option order -->
-                <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="randomizeOrder">
-                        Randomize Option Order
-                    </label>
-                </div>
-
-                <!-- Options input -->
-                <div class="options">
-                    <div class="option">
-                        <input type="text" class="option-input" placeholder="Enter option">
-                        <button class="remove-option" onclick="removeOption(this)">Remove</button>
+                <?php if (isset($_SESSION['error'])): ?>
+                    <div class="error-message">
+                        <?php echo htmlspecialchars($_SESSION['error']); unset($_SESSION['error']); ?>
                     </div>
-                </div>
-                <button class="add-option" onclick="addOption()">Add Option</button>
-                
-                <button class="create-poll" onclick="createPoll()">Create Poll</button>
-                <button class="publish-poll" onclick="publishPoll()">Publish Poll</button>
+                <?php endif; ?>
+
+                <?php if (isset($_SESSION['success'])): ?>
+                    <div class="success-message">
+                        <?php echo htmlspecialchars($_SESSION['success']); unset($_SESSION['success']); ?>
+                    </div>
+                <?php endif; ?>
+
+                <form action="create_poll.php" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label for="poll_title">Poll Title</label>
+                        <input type="text" id="poll_title" name="poll_title" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="poll_description">Poll Description</label>
+                        <textarea id="poll_description" name="poll_description" rows="4" required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="poll_type">Poll Type</label>
+                        <select id="poll_type" name="poll_type" required>
+                            <option value="multiple-choice">Multiple Choice</option>
+                            <option value="checkboxes">Checkboxes</option>
+                            <option value="star-rating">Star Rating</option>
+                            <option value="likert-scale">Likert Scale</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="poll_start">Start Date</label>
+                        <input type="datetime-local" id="poll_start" name="poll_start" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="poll_end">End Date</label>
+                        <input type="datetime-local" id="poll_end" name="poll_end" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="poll_image">Poll Image</label>
+                        <input type="file" id="poll_image" name="poll_image" accept="image/*">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="privacy">Privacy Setting</label>
+                        <select id="privacy" name="privacy" required>
+                            <option value="public">Public</option>
+                            <option value="private">Private</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="allow_multiple_responses" name="allow_multiple_responses">
+                            <label for="allow_multiple_responses">Allow Multiple Responses</label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="anonymous_voting" name="anonymous_voting">
+                            <label for="anonymous_voting">Anonymous Voting</label>
+                        </div>
+
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="randomize_order" name="randomize_order">
+                            <label for="randomize_order">Randomize Option Order</label>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="result_display">Result Display</label>
+                        <select id="result_display" name="result_display" required>
+                            <option value="live">Show Results Live</option>
+                            <option value="after-voting">Show After Voting</option>
+                            <option value="at-end">Show at Poll End</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>Poll Options</label>
+                        <div id="options-container" class="options-container">
+                            <div class="option-input">
+                                <input type="text" name="poll_options[]" required placeholder="Option 1">
+                            </div>
+                            <div class="option-input">
+                                <input type="text" name="poll_options[]" required placeholder="Option 2">
+                            </div>
+                        </div>
+                        <button type="button" class="add-option" onclick="addOption()">Add Another Option</button>
+                    </div>
+
+                    <button type="submit" class="create-poll">Create Poll</button>
+                </form>
             </section>
         </div>
     </div>
 
     <script>
         function addOption() {
-            const optionContainer = document.createElement('div');
-            optionContainer.className = 'option';
-
+            const container = document.getElementById('options-container');
+            const optionCount = container.children.length + 1;
+            
+            const optionDiv = document.createElement('div');
+            optionDiv.className = 'option-input';
+            
             const input = document.createElement('input');
             input.type = 'text';
-            input.className = 'option-input';
-            input.placeholder = 'Enter option';
-
+            input.name = 'poll_options[]';
+            input.required = true;
+            input.placeholder = `Option ${optionCount}`;
+            
             const removeButton = document.createElement('button');
+            removeButton.type = 'button';
             removeButton.className = 'remove-option';
-            removeButton.innerText = 'Remove';
-            removeButton.onclick = () => removeOption(removeButton);
-
-            optionContainer.appendChild(input);
-            optionContainer.appendChild(removeButton);
-
-            document.querySelector('.options').appendChild(optionContainer);
-            }
-
-            function removeOption(button) {
-            button.parentElement.remove();
-            }
-
-            function togglePrivacyOptions() {
-            const privacy = document.getElementById('pollPrivacy').value;
-            const pollLink = document.getElementById('pollLink');
-            if (privacy === 'private') {
-                const link = 'https://pollpioneer.com/poll/' + Math.random().toString(36).substr(2, 9);
-                document.getElementById('generatedLink').textContent = link;
-                pollLink.style.display = 'block';
-            } else {
-                pollLink.style.display = 'none';
-            }
-            }
-
-            function createPoll() {
-            const title = document.getElementById('pollTitle').value;
-            const description = document.getElementById('pollDescription').value;
-            const type = document.getElementById('pollType').value;
-            const privacy = document.getElementById('pollPrivacy').value;
-            const options = Array.from(document.querySelectorAll('.option-input')).map(input => input.value);
-            const pollStart = document.getElementById('pollStart').value;
-            const pollEnd = document.getElementById('pollEnd').value;
-            const votingRestrictions = document.getElementById('votingRestrictions').value;
-            const allowMultipleResponses = document.getElementById('allowMultipleResponses').checked;
-            const anonymousVoting = document.getElementById('anonymousVoting').checked;
-            const resultDisplay = document.getElementById('resultDisplay').value;
-            const randomizeOrder = document.getElementById('randomizeOrder').checked;
-
-            if (!title || !description || options.some(opt => !opt)) {
-                alert('Please fill out all fields and options.');
-                return;
-            }
-
-            const poll = {
-                title,
-                description,
-                type,
-                privacy,
-                options,
-                duration: { start: pollStart, end: pollEnd },
-                votingRestrictions,
-                allowMultipleResponses,
-                anonymousVoting,
-                resultDisplay,
-                randomizeOrder
+            removeButton.textContent = 'Remove';
+            removeButton.onclick = function() {
+                container.removeChild(optionDiv);
             };
+            
+            optionDiv.appendChild(input);
+            optionDiv.appendChild(removeButton);
+            container.appendChild(optionDiv);
+        }
 
-            if (randomizeOrder) {
-                poll.options = poll.options.sort(() => Math.random() - 0.5);
-            }
+        // Set minimum datetime for start and end dates
+        window.addEventListener('load', function() {
+            const now = new Date();
+            now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+            
+            const startInput = document.getElementById('poll_start');
+            const endInput = document.getElementById('poll_end');
+            
+            startInput.min = now.toISOString().slice(0, 16);
+            endInput.min = now.toISOString().slice(0, 16);
+            
+            startInput.addEventListener('change', function() {
+                endInput.min = this.value;
+            });
+        });
+        function toggleUserDropdown() {
+        const dropdown = document.getElementById('user-dropdown');
+        dropdown.classList.toggle('show');
+    }
 
-            console.log('Poll created:', poll);
-            alert('Poll created successfully! Check console for details.');
-
-            resetForm();
-            }
-
-            function publishPoll() {
-            alert('Poll published successfully!');
-            }
-
-            function resetForm() {
-            document.getElementById('pollTitle').value = '';
-            document.getElementById('pollDescription').value = '';
-            document.getElementById('pollType').value = 'multiple-choice';
-            document.getElementById('pollPrivacy').value = 'public';
-            document.getElementById('pollStart').value = '';
-            document.getElementById('pollEnd').value = '';
-            document.getElementById('votingRestrictions').value = 'none';
-            document.getElementById('allowMultipleResponses').checked = false;
-            document.getElementById('anonymousVoting').checked = false;
-            document.getElementById('resultDisplay').value = 'live';
-            document.getElementById('randomizeOrder').checked = false;
-            document.querySelector('.options').innerHTML = `
-                <div class="option">
-                    <input type="text" class="option-input" placeholder="Enter option">
-                    <button class="remove-option" onclick="removeOption(this)">Remove</button>
-                </div>
-            `;
-            document.getElementById('pollLink').style.display = 'none';
-            }
-</script>
-
+    // Close dropdown when clicking outside
+    window.addEventListener('click', function(e) {
+        const dropdown = document.getElementById('user-dropdown');
+        const userIcon = document.querySelector('.user-icon');
+        
+        if (dropdown.classList.contains('show') && 
+            !dropdown.contains(e.target) && 
+            e.target !== userIcon) {
+            dropdown.classList.remove('show');
+        }
+    });
+    </script>
 </body>
 </html>
