@@ -102,34 +102,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->close();
 
             // Update poll options
-            // 1. Update existing options
-            foreach ($existing_options as $existing_option) {
-                $option_id = $existing_option['OptionID'];
-                $option_text = trim($new_options[$option_id] ?? '');
-                if ($option_text === '') {
-                    // If the option is not in the new list, delete it
-                    $delete_option_query = $conn->prepare("DELETE FROM PP_PollOptions WHERE OptionID = ?");
-                    $delete_option_query->bind_param("i", $option_id);
-                    $delete_option_query->execute();
-                    $delete_option_query->close();
-                } else {
-                    // Update the option
-                    $update_option_query = $conn->prepare("UPDATE PP_PollOptions SET OptionText = ? WHERE OptionID = ?");
-                    $update_option_query->bind_param("si", $option_text, $option_id);
-                    $update_option_query->execute();
-                    $update_option_query->close();
-                }
-            }
+           // 1. Update existing options (keeping existing ones intact)
+           foreach ($existing_options as $existing_option) {
+            $option_id = $existing_option['OptionID'];
+            $option_text = trim($new_options[$option_id] ?? '');
 
-            // 2. Add new options
-            foreach ($new_options as $index => $option_text) {
-                if (!isset($existing_options[$index])) {
-                    $insert_option_query = $conn->prepare("INSERT INTO PP_PollOptions (PollID, OptionText) VALUES (?, ?)");
-                    $insert_option_query->bind_param("is", $poll_id, $option_text);
-                    $insert_option_query->execute();
-                    $insert_option_query->close();
-                }
+            if ($option_text === '') {
+                // If the option is removed (empty), delete it
+                $delete_option_query = $conn->prepare("DELETE FROM PP_PollOptions WHERE OptionID = ?");
+                $delete_option_query->bind_param("i", $option_id);
+                $delete_option_query->execute();
+                $delete_option_query->close();
+            } else {
+                // If the option is updated (not empty), update it
+                $update_option_query = $conn->prepare("UPDATE PP_PollOptions SET OptionText = ? WHERE OptionID = ?");
+                $update_option_query->bind_param("si", $option_text, $option_id);
+                $update_option_query->execute();
+                $update_option_query->close();
             }
+        }
+
+        // 2. Add new options (if any)
+        foreach ($new_options as $option_text) {
+            $option_text = trim($option_text);  // Clean the option text
+            if (!empty($option_text)) {
+                // Insert new option only if the text is not empty
+                $insert_option_query = $conn->prepare("INSERT INTO PP_PollOptions (PollID, OptionText) VALUES (?, ?)");
+                $insert_option_query->bind_param("is", $poll_id, $option_text);
+                $insert_option_query->execute();
+                $insert_option_query->close();
+            }
+        }
+
 
             // Commit the transaction
             $conn->commit();
@@ -289,13 +293,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </label>
 
     <!-- Add Poll Options Here -->
+    <!-- Poll Options -->
     <h3>Poll Options:</h3>
-    <div id="options-container">
-        <?php foreach ($existing_options as $option): ?>
-            <input type="text" name="options[<?php echo $option['OptionID']; ?>]" value="<?php echo htmlspecialchars($option['OptionText']); ?>" placeholder="Option <?php echo $option['OptionID']; ?>">
-        <?php endforeach; ?>
-        <input type="text" name="options[]" placeholder="Add new option">
-    </div>
+<div id="options-container">
+    <!-- Existing options -->
+    <?php foreach ($existing_options as $option): ?>
+        <input type="text" name="options[<?php echo $option['OptionID']; ?>]" value="<?php echo htmlspecialchars($option['OptionText']); ?>" placeholder="Option <?php echo $option['OptionID']; ?>">
+    <?php endforeach; ?>
+
+    <!-- Add new options -->
+    <input type="text" name="options[]" placeholder="Add new option">
+    <input type="text" name="options[]" placeholder="Add another new option">
+    <input type="text" name="options[]" placeholder="Add another new option">
+    <input type="text" name="options[]" placeholder="Add another new option">
+    <!-- Add as many new option fields as you want -->
+</div>
+
 
     <button type="submit">Update Poll</button>
 </form>
