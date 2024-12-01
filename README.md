@@ -2,8 +2,10 @@
 
 Poll Pioneer is a web-based platform for creating, participating in, and exploring polls. It empowers users to voice their opinions, shape discussions, and analyze results in a dynamic and engaging way. Designed for scalability and user-friendliness, Poll Pioneer is your go-to platform for all things polling.
 
-Live Demo
-Experience Poll Pioneer live at Poll Pioneer Demo.
+## Live Demo
+
+Experience Poll Pioneer live at [Poll Pioneer Demo](http://169.239.251.102:3341/~andre.ayiku/Poll-Pioneer/index.php).
+
 
 ## Features
 
@@ -86,5 +88,4 @@ This project is licensed under the MIT License. See the `LICENSE` file for detai
 
 - **Developers**: [gilberttetteh,AndreAyiku,sedemabla,jadarko55]
 - **Technologies**: PHP, MySQL, JavaScript
-- **Community**: All contributors and users who provided valuable feedback.
 
