@@ -47,30 +47,7 @@ Experience Poll Pioneer live at Poll Pioneer Demo.
 - **Boxicons** for icons and styling.
 - **XAMPP** for local development environment.
 
----
 
-## Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-username/poll-pioneer.git
-   ```
-2. Navigate to the project directory:
-   ```bash
-   cd poll-pioneer
-   ```
-3. Set up the database:
-   - Import the `poll_pioneer.sql` file into your MySQL server.
-   - Configure your database connection in `db/config.php`.
-
-4. Start a local server:
-   - If using XAMPP, move the project folder to the `htdocs` directory.
-   - Start Apache and MySQL from the XAMPP control panel.
-
-5. Access the application:
-   - Open your browser and navigate to `http://localhost/poll-pioneer`.
-
----
 
 ## Usage
 
@@ -98,25 +75,6 @@ Poll-Pioneer/
 
 ---
 
-## Contributing
-
-We welcome contributions to improve Poll Pioneer! Here's how you can get started:
-1. Fork the repository.
-2. Create a new branch for your feature/bugfix:
-   ```bash
-   git checkout -b feature-name
-   ```
-3. Commit your changes:
-   ```bash
-   git commit -m "Add feature-name"
-   ```
-4. Push to your branch:
-   ```bash
-   git push origin feature-name
-   ```
-5. Open a pull request on the main repository.
-
----
 
 ## License
 
